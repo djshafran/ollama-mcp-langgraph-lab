@@ -1,0 +1,45 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mcp:
+    build: ./mcp_server
+    environment:
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - ALLOWED_DIR=/workspace
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./workspace:/workspace
+
+  agent:
+    build: ./agent
+    depends_on:
+      - ollama
+      - mcp
+    environment:
+      - MODEL=${MODEL}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - MCP_URL=${MCP_URL}
+      - SYSTEM_PROMPT=${SYSTEM_PROMPT}
+      - TEMPERATURE=${TEMPERATURE}
+      - NUM_CTX=${NUM_CTX}
+      - REASONING=${REASONING}
+      - SHOW_REASONING=${SHOW_REASONING}
+    volumes:
+      - ./workspace:/workspace
+
+volumes:
+  ollama:
