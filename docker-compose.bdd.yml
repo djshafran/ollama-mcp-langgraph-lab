@@ -1,0 +1,21 @@
+services:
+  l0:
+    build:
+      context: .
+      dockerfile: l0_server/Dockerfile
+    environment:
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - L0_BACKEND=${L0_BACKEND:-heritage}
+      - L0_ARTIFACT_DIR=/artifacts/current
+      - L0_DATA_DIR=/data
+      # Heritage local mode (optional overrides)
+      # - HERITAGE_METHOD=shell
+      # - HERITAGE_BASE_DIR=/opt/Heritage_Platform
+      # - HERITAGE_LEXICON=...
+    ports:
+      - "8000"
+    volumes:
+      - ./l0_artifacts:/artifacts
+      - ./l0_data:/data:ro
+      - ./Heritage_Platform:/opt/Heritage_Platform:ro

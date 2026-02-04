@@ -3,7 +3,9 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY l0_core /app/l0_core
-RUN pip install --no-cache-dir -U pip && pip install --no-cache-dir fastmcp /app/l0_core
+RUN pip install --no-cache-dir -U pip \
+ && pip install --no-cache-dir fastmcp /app/l0_core \
+ && pip install --no-cache-dir heritage
 
 COPY l0_server/server.py /app/server.py
 

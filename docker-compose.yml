@@ -33,11 +33,18 @@ services:
       - MCP_PORT=8000
       - L0_ARTIFACT_DIR=/artifacts/current
       - L0_DATA_DIR=/data
+      - L0_BACKEND=${L0_BACKEND}
+      - HERITAGE_METHOD=${HERITAGE_METHOD}
+      - HERITAGE_BASE_DIR=${HERITAGE_BASE_DIR}
+      - HERITAGE_REQUEST_TIMEOUT=${HERITAGE_REQUEST_TIMEOUT}
+      - HERITAGE_REQUEST_ATTEMPTS=${HERITAGE_REQUEST_ATTEMPTS}
+      - HERITAGE_LEXICON=${HERITAGE_LEXICON}
     ports:
       - "8001:8000"
     volumes:
       - ./l0_artifacts:/artifacts
       - ./l0_data:/data
+      - ./Heritage_Platform:/opt/Heritage_Platform:ro
 
   agent:
     build: ./agent

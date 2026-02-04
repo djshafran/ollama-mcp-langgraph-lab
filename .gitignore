@@ -1,5 +1,13 @@
 .env
+.env.*
 workspace/
 __pycache__/
 *.pyc
 .DS_Store
+Heritage_Platform/
+Heritage_Resources/
+Zen/
+.docker-nocreds/
+allure-results/
+*.egg-info/
+.venv
