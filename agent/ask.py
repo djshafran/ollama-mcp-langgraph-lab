@@ -14,6 +14,17 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return v.strip().lower() in ("1", "true", "yes", "y", "on")
 
 
+def _env_reasoning() -> bool | None:
+    v = os.getenv("THINKING_TRACE", "").strip().lower()
+    if not v:
+        v = os.getenv("REASONING", "").strip().lower()
+    if v in ("1", "true", "yes", "y", "on"):
+        return True
+    if v in ("0", "false", "no", "n", "off"):
+        return False
+    return None
+
+
 async def run_once(prompt: str) -> None:
     model_name = os.getenv("MODEL", "qwen3:8b")
     ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
@@ -22,24 +33,22 @@ async def run_once(prompt: str) -> None:
     temperature = float(os.getenv("TEMPERATURE", "0.2"))
     num_ctx = int(os.getenv("NUM_CTX", "2048"))
 
-    reasoning_env = os.getenv("REASONING", "").strip().lower()
-    reasoning = None
-    if reasoning_env in ("1", "true", "yes", "y", "on"):
-        reasoning = True
-    elif reasoning_env in ("0", "false", "no", "n", "off"):
-        reasoning = False
+    reasoning = _env_reasoning()
 
     show_reasoning = _env_bool("SHOW_REASONING", False)
 
     # 1) MCP tools (HTTP transport)
-    client = MultiServerMCPClient(
-        {
-            "lab": {
-                "transport": "http",
-                "url": mcp_url,
-            }
+    servers = {
+        "lab": {
+            "transport": "http",
+            "url": mcp_url,
         }
-    )
+    }
+    l0_url = os.getenv("L0_MCP_URL", "").strip()
+    if l0_url:
+        servers["l0"] = {"transport": "http", "url": l0_url}
+
+    client = MultiServerMCPClient(servers)
     tools = await client.get_tools()
 
     # 2) LLM via Ollama

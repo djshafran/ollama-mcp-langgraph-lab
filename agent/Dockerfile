@@ -6,5 +6,6 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -U pip && pip install --no-cache-dir -r /app/requirements.txt
 
 COPY ask.py /app/ask.py
+COPY flow.py /app/flow.py
 
 CMD ["python", "/app/ask.py"]

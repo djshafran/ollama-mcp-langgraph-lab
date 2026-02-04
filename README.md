@@ -2,10 +2,11 @@
 Docker Compose lab‑stack: Ollama + MCP (FastMCP) + LangChain/LangGraph агент. Всё настраивается через `.env`.
 
 **Overview**
-Three services in one Compose:
+Four services in one Compose:
 1. Ollama LLM server (pulls and runs models).
 2. FastMCP server exposes tools over HTTP at `/mcp`.
-3. LangChain/LangGraph agent CLI that uses ChatOllama + MCP tools.
+3. L0 FastMCP server exposes deterministic SPIR tools at `/mcp`.
+4. LangChain/LangGraph agent CLI that uses ChatOllama + MCP tools.
 
 **Requirements**
 1. Docker + Docker Compose.
@@ -36,4 +37,6 @@ mkdir -p workspace
 1. Default profile is `gpu` (see `lab.sh`). Use `./lab.sh up cpu` if you do not have GPU support.
 2. Ollama is exposed on `http://localhost:11434`.
 3. MCP server is exposed on `http://localhost:8000/mcp`.
-4. Model, context size, and reasoning mode are controlled in `.env`.
+4. L0 MCP server is exposed on `http://localhost:8001/mcp`.
+5. Model, context size, and reasoning mode are controlled in `.env`.
+6. Flow mode runs the explicit graph: `python /app/flow.py "<prompt>"`.

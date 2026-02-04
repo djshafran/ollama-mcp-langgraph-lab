@@ -24,19 +24,39 @@ services:
     volumes:
       - ./workspace:/workspace
 
+  l0:
+    build:
+      context: .
+      dockerfile: l0_server/Dockerfile
+    environment:
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - L0_ARTIFACT_DIR=/artifacts/current
+      - L0_DATA_DIR=/data
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./l0_artifacts:/artifacts
+      - ./l0_data:/data
+
   agent:
     build: ./agent
     depends_on:
       - ollama
       - mcp
+      - l0
     environment:
       - MODEL=${MODEL}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
       - MCP_URL=${MCP_URL}
+      - L0_MCP_URL=${L0_MCP_URL}
       - SYSTEM_PROMPT=${SYSTEM_PROMPT}
       - TEMPERATURE=${TEMPERATURE}
       - NUM_CTX=${NUM_CTX}
       - REASONING=${REASONING}
+      - THINKING_TRACE=${THINKING_TRACE}
+      - PLAN_BACKEND=${PLAN_BACKEND}
+      - RECONCILE_BACKEND=${RECONCILE_BACKEND}
       - SHOW_REASONING=${SHOW_REASONING}
     volumes:
       - ./workspace:/workspace
