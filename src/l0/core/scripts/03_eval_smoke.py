@@ -12,9 +12,9 @@ from sprs_l0.validate import validate_spir
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--in", dest="input", default="l0_data/prepared/corpus.jsonl")
-    parser.add_argument("--artifacts-dir", default="l0_artifacts/v0.1.0")
-    parser.add_argument("--out", default="l0_artifacts/v0.1.0/eval_smoke.json")
+    parser.add_argument("--in", dest="input", default="src/l0/data/prepared/corpus.jsonl")
+    parser.add_argument("--artifacts-dir", default="src/l0/artifacts/v0.1.0")
+    parser.add_argument("--out", default="src/l0/artifacts/v0.1.0/eval_smoke.json")
     parser.add_argument("--sample", type=int, default=50)
     args = parser.parse_args()
 

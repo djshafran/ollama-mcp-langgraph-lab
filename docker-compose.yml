@@ -27,7 +27,7 @@ services:
   l0:
     build:
       context: .
-      dockerfile: l0_server/Dockerfile
+      dockerfile: src/l0/server/Dockerfile
     environment:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
@@ -42,9 +42,9 @@ services:
     ports:
       - "8001:8000"
     volumes:
-      - ./l0_artifacts:/artifacts
-      - ./l0_data:/data
-      - ./Heritage_Platform:/opt/Heritage_Platform:ro
+      - ./src/l0/artifacts:/artifacts
+      - ./src/l0/data:/data
+      - ./third_party/heritage/Heritage_Platform:/opt/Heritage_Platform:ro
 
   agent:
     build: ./agent

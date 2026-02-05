@@ -19,8 +19,8 @@ def iter_lines(path: Path):
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--raw-dir", default="l0_data/raw")
-    parser.add_argument("--out", default="l0_data/prepared/corpus.jsonl")
+    parser.add_argument("--raw-dir", default="src/l0/data/raw")
+    parser.add_argument("--out", default="src/l0/data/prepared/corpus.jsonl")
     args = parser.parse_args()
 
     raw_dir = Path(args.raw_dir)

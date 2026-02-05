@@ -2,8 +2,8 @@
   "sources": [
     {
       "id": "bg_vedabase_ch1_sanskrit_only",
-      "path": "l0_data/raw/bg/vedabase.io/chapter-01-sanskrit-only.md",
-      "derived_txt": "l0_data/raw/bhagavad_gita_ch1.txt",
+      "path": "src/l0/data/raw/bg/vedabase.io/chapter-01-sanskrit-only.md",
+      "derived_txt": "src/l0/data/raw/bhagavad_gita_ch1.txt",
       "format": "devanagari",
       "notes": "Test sample, chapter 1 only; one shloka per line in derived txt."
     }

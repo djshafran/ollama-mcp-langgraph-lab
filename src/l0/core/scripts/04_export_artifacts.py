@@ -8,8 +8,8 @@ from pathlib import Path
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--from", dest="src", default="l0_artifacts/v0.1.0")
-    parser.add_argument("--to", dest="dst", default="l0_artifacts/current")
+    parser.add_argument("--from", dest="src", default="src/l0/artifacts/v0.1.0")
+    parser.add_argument("--to", dest="dst", default="src/l0/artifacts/current")
     args = parser.parse_args()
 
     src = Path(args.src)

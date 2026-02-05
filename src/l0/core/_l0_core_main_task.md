@@ -27,12 +27,12 @@
 
 Добавляем **L0 как отдельную подсистему**:
 
-1. **`l0_core`** — *чистая* Python‑библиотека (без LangChain/MCP/Docker)
+1. **`src/l0/core`** — *чистая* Python‑библиотека (без LangChain/MCP/Docker)
    Функции: `analyze / keys / compress / validate / constraints`
 
    * SPIR schema + versioning.
 
-2. **`l0_server`** — тонкая обёртка FastMCP, которая экспортирует `l0_core` как tools на `/mcp`
+2. **`src/l0/server`** — тонкая обёртка FastMCP, которая экспортирует `src/l0/core` как tools на `/mcp`
    (транспорт можно менять потом, ядро — нет).
 
 3. **`agent`** получает два режима:
@@ -50,7 +50,7 @@
 Рекомендую добавить:
 
 ```
-l0_core/
+src/l0/core/
   pyproject.toml
   sprs_l0/
     __init__.py
@@ -71,13 +71,13 @@ l0_core/
     unit/
     golden/
     bdd/
-l0_server/
+src/l0/server/
   Dockerfile
   server.py   # импортирует из sprs_l0
-l0_data/
+src/l0/data/
   raw/
   prepared/
-l0_artifacts/
+src/l0/artifacts/
   current/   # симлинк/копия на версию
   v0.1.0/
 agent/
@@ -85,7 +85,7 @@ agent/
   flow.py     # новый явный LangGraph граф
 ```
 
-> Важно: `l0_data` и `l0_artifacts` держите отдельно от `workspace/`, чтобы не смешивать “лабораторные файлы” и “артефакты продукта”.
+> Важно: `src/l0/data` и `src/l0/artifacts` держите отдельно от `workspace/`, чтобы не смешивать “лабораторные файлы” и “артефакты продукта”.
 
 ---
 
@@ -118,7 +118,7 @@ THINKING_TRACE=true       # true/false (maps to ChatOllama(reasoning=...))
 
 ```yaml
   l0:
-    build: ./l0_server
+    build: ./src/l0/server
     environment:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8000
@@ -127,8 +127,8 @@ THINKING_TRACE=true       # true/false (maps to ChatOllama(reasoning=...))
     ports:
       - "8001:8000"   # хост:8001 -> контейнер:8000 (чтобы не конфликтовать с mcp:8000)
     volumes:
-      - ./l0_artifacts:/artifacts
-      - ./l0_data:/data
+      - ./src/l0/artifacts:/artifacts
+      - ./src/l0/data:/data
 ```
 
 И в `agent` добавьте env:
@@ -244,21 +244,21 @@ tools = await client.get_tools()
 
 ## E1) Данные (вход)
 
-В `l0_data/raw/` кладёте:
+В `src/l0/data/raw/` кладёте:
 
 * `bhagavad_gita.txt`
 * `srimad_bhagavatam.txt`
 
 Формат: деванагари или IAST (главное — единообразие или явная маркировка).
 
-**Требование:** сохранить “provenance” (откуда текст, какая лицензия/условия) в `l0_data/raw/manifest.json`.
+**Требование:** сохранить “provenance” (откуда текст, какая лицензия/условия) в `src/l0/data/raw/manifest.json`.
 
 ## E2) Пайплайн подготовки (scripts/)
 
 ### Script 00 — Prepare corpus
 
 **Вход:** raw тексты
-**Выход:** `l0_data/prepared/corpus.jsonl`
+**Выход:** `src/l0/data/prepared/corpus.jsonl`
 
 Каждая запись:
 
@@ -277,7 +277,7 @@ tools = await client.get_tools()
 * частоты окончаний/суффиксов (эвристика),
 * стоп‑список служебных элементов.
 
-**Выход:** `l0_artifacts/v0.1.0/lexicon.json`, `freqs.json`
+**Выход:** `src/l0/artifacts/v0.1.0/lexicon.json`, `freqs.json`
 
 ### Script 02 — Train priors / ranker (этап 1)
 
@@ -307,7 +307,7 @@ tools = await client.get_tools()
 
 ### Script 04 — Export artifacts
 
-Складываем всё в версионируемую папку `l0_artifacts/v0.1.0/` и делаем `current/` ссылкой/копией.
+Складываем всё в версионируемую папку `src/l0/artifacts/v0.1.0/` и делаем `current/` ссылкой/копией.
 
 ---
 
@@ -332,9 +332,9 @@ tools = await client.get_tools()
 
 ## F1) L0 “smoke inference” как команда (обязательный артефакт)
 
-Добавьте CLI (в l0_core) или скрипт:
+Добавьте CLI (в src/l0/core) или скрипт:
 
-* `python -m sprs_l0.cli analyze --in l0_data/prepared/corpus.jsonl --out workspace/spir_samples.jsonl --limit 50`
+* `python -m sprs_l0.cli analyze --in src/l0/data/prepared/corpus.jsonl --out workspace/spir_samples.jsonl --limit 50`
 * `python -m sprs_l0.cli validate --in workspace/spir_samples.jsonl`
 
 Критерии:
@@ -370,7 +370,7 @@ tools = await client.get_tools()
 * Подключить L0 в `MultiServerMCPClient`
 * L0 может быть вызван моделью (не детерминированно)
 
-**Подготовка:** минимальная (`l0_artifacts/current` может быть пустым на v0.1)
+**Подготовка:** минимальная (`src/l0/artifacts/current` может быть пустым на v0.1)
 
 ---
 
@@ -383,8 +383,8 @@ tools = await client.get_tools()
 
 **Подготовка:**
 
-* `l0_artifacts/current` (лексикон/priors)
-* `l0_data/prepared` (корпус/индексация)
+* `src/l0/artifacts/current` (лексикон/priors)
+* `src/l0/data/prepared` (корпус/индексация)
 
 ---
 
@@ -436,10 +436,10 @@ tools = await client.get_tools()
 
 **Сделать L0 как продукт и встроить в текущий lab‑stack.**
 
-1. Вынести L0 в `l0_core` (чистая библиотека) с SPIR schema + версиями + функциями `analyze/keys/compress/validate/constraints`.
-2. Сделать `l0_server` (FastMCP) как тонкую обёртку над `l0_core`, поднять отдельным сервисом `l0` в docker‑compose, подключить в `agent/ask.py` как второй MCP‑сервер через `MultiServerMCPClient`.
+1. Вынести L0 в `src/l0/core` (чистая библиотека) с SPIR schema + версиями + функциями `analyze/keys/compress/validate/constraints`.
+2. Сделать `src/l0/server` (FastMCP) как тонкую обёртку над `src/l0/core`, поднять отдельным сервисом `l0` в docker‑compose, подключить в `agent/ask.py` как второй MCP‑сервер через `MultiServerMCPClient`.
 3. Добавить `agent/flow.py` (явный LangGraph граф) с узлами `pivot(L0) → plan → retrieve → compress(L0) → reconcile → answer`, где планнер/ре-консайлер выбираются через `PLAN_BACKEND/RECONCILE_BACKEND`. Thinking trace (`THINKING_TRACE/REASONING`) оставить как телеметрию, не как модуль reasoning.
-4. Реализовать пайплайн подготовки/“обучения” L0 на корпусах **Бхагавад‑гита + Шримад Бхагаватам**: `prepare_corpus → build_lexicon → train_priors → export_artifacts`. Все артефакты версионировать в `l0_artifacts/vX.Y.Z` и выставлять `current/`.
+4. Реализовать пайплайн подготовки/“обучения” L0 на корпусах **Бхагавад‑гита + Шримад Бхагаватам**: `prepare_corpus → build_lexicon → train_priors → export_artifacts`. Все артефакты версионировать в `src/l0/artifacts/vX.Y.Z` и выставлять `current/`.
 5. Добавить тестовые инференсы L0: `smoke` (batch analyze+validate на выборке), `golden` (фикстуры), `bdd` (Given/When/Then для поведения normalize/segment/kbest/validate), и интеграционный прогон flow‑графа со стримингом событий и сохранением артефактов.
 
 ---

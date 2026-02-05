@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
+HERITAGE_ROOT="${HERITAGE_ROOT:-$ROOT_DIR/third_party/heritage}"
+mkdir -p "$HERITAGE_ROOT"
 
 clone_or_update() {
   local url="$1"
@@ -30,8 +32,8 @@ clone_or_update() {
   fi
 }
 
-clone_or_update "https://gitlab.inria.fr/huet/Zen.git" "Zen"
-clone_or_update "https://gitlab.inria.fr/huet/Heritage_Resources.git" "Heritage_Resources"
-clone_or_update "https://gitlab.inria.fr/huet/Heritage_Platform.git" "Heritage_Platform"
+clone_or_update "https://gitlab.inria.fr/huet/Zen.git" "$HERITAGE_ROOT/Zen"
+clone_or_update "https://gitlab.inria.fr/huet/Heritage_Resources.git" "$HERITAGE_ROOT/Heritage_Resources"
+clone_or_update "https://gitlab.inria.fr/huet/Heritage_Platform.git" "$HERITAGE_ROOT/Heritage_Platform"
 
 echo "Done."

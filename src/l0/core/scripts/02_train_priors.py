@@ -8,7 +8,7 @@ from pathlib import Path
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--artifacts-dir", default="l0_artifacts/v0.1.0")
+    parser.add_argument("--artifacts-dir", default="src/l0/artifacts/v0.1.0")
     args = parser.parse_args()
 
     art_dir = Path(args.artifacts_dir)

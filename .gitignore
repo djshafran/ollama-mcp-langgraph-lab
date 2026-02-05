@@ -4,6 +4,7 @@ workspace/
 __pycache__/
 *.pyc
 .DS_Store
+third_party/heritage/
 Heritage_Platform/
 Heritage_Resources/
 Zen/
@@ -11,3 +12,4 @@ Zen/
 allure-results/
 *.egg-info/
 .venv
+.obsidian/

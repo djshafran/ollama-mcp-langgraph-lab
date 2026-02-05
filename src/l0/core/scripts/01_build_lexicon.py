@@ -21,8 +21,8 @@ def _clean_token(text: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--in", dest="input", default="l0_data/prepared/corpus.jsonl")
-    parser.add_argument("--out-dir", default="l0_artifacts/v0.1.0")
+    parser.add_argument("--in", dest="input", default="src/l0/data/prepared/corpus.jsonl")
+    parser.add_argument("--out-dir", default="src/l0/artifacts/v0.1.0")
     parser.add_argument("--use-analyze", action="store_true", help="Use sprs_l0.analyze() tokens instead of whitespace split")
     parser.add_argument("--exclude-nonletters", action="store_true", help="Drop tokens with no letters (punct/digits)")
     args = parser.parse_args()
