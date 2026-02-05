@@ -157,3 +157,57 @@ def step_then_has_heritage_details(context):
             break
 
     assert found, "No token contains feats.heritage.analyses (heritage backend not active or returned empty analyses)"
+
+
+@then('SPIR capabilities include "{capability}"')
+def step_then_capability_includes(context, capability: str):
+    spir = getattr(context, "spir", None)
+    assert isinstance(spir, dict), "SPIR missing or invalid"
+
+    caps = spir.get("capabilities", [])
+    assert isinstance(caps, list), "SPIR.capabilities must be list"
+
+    allure.attach(
+        "\n".join([str(c) for c in caps]),
+        name="capabilities list",
+        attachment_type=allure.attachment_type.TEXT,
+    )
+
+    assert capability in caps, f'Capability "{capability}" not found. Got: {caps}'
+
+
+@then("SPIR dependencies are present")
+def step_then_dependencies_present(context):
+    spir = getattr(context, "spir", None)
+    assert isinstance(spir, dict), "SPIR missing or invalid"
+
+    deps = spir.get("dependencies", [])
+    assert isinstance(deps, list), "SPIR.dependencies must be list"
+
+    allure.attach(
+        json.dumps(deps, ensure_ascii=False, indent=2),
+        name="dependencies list",
+        attachment_type=allure.attachment_type.JSON,
+    )
+
+    assert len(deps) > 0, "SPIR.dependencies is empty"
+
+
+@then("SPIR dependencies have roles")
+def step_then_dependencies_have_roles(context):
+    spir = getattr(context, "spir", None)
+    assert isinstance(spir, dict), "SPIR missing or invalid"
+
+    deps = spir.get("dependencies", [])
+    assert isinstance(deps, list), "SPIR.dependencies must be list"
+
+    missing = []
+    for i, dep in enumerate(deps):
+        if not isinstance(dep, dict):
+            missing.append(i)
+            continue
+        role = dep.get("role")
+        if not isinstance(role, str) or not role.strip():
+            missing.append(i)
+
+    assert not missing, f"Dependencies missing role at indices: {missing}"

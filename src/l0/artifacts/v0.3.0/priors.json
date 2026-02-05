@@ -1,0 +1,6 @@
+{
+  "rare_token_penalty": 1.0,
+  "common_token_bonus": 0.5,
+  "unk_penalty": 2.0,
+  "lemma_bonus": 0.2
+}

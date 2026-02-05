@@ -56,6 +56,29 @@ def validate_spir(spir: dict[str, Any]) -> dict[str, Any]:
         errors.append("segments must be a list")
         segments = []
 
+    dependencies = spir.get("dependencies")
+    if not isinstance(dependencies, list):
+        errors.append("dependencies must be a list")
+        dependencies = []
+    else:
+        for i, dep in enumerate(dependencies):
+            if not isinstance(dep, dict):
+                errors.append(f"dependencies[{i}] must be object")
+                continue
+            head = dep.get("head")
+            dep_idx = dep.get("dep")
+            role = dep.get("role")
+            if head is not None and not isinstance(head, int):
+                errors.append(f"dependencies[{i}].head must be int or null")
+            if not isinstance(dep_idx, int):
+                errors.append(f"dependencies[{i}].dep must be int")
+            if not _is_str(role) or not role.strip():
+                errors.append(f"dependencies[{i}].role missing or invalid")
+            if isinstance(dep_idx, int) and (dep_idx < 0 or dep_idx >= len(tokens)):
+                errors.append(f"dependencies[{i}].dep out of range")
+            if isinstance(head, int) and (head < 0 or head >= len(tokens)):
+                errors.append(f"dependencies[{i}].head out of range")
+
     capabilities = spir.get("capabilities")
     if not isinstance(capabilities, list):
         errors.append("capabilities must be a list")
@@ -63,6 +86,7 @@ def validate_spir(spir: dict[str, Any]) -> dict[str, Any]:
     metrics = {
         "token_count": len(tokens),
         "segment_count": len(segments),
+        "dependency_count": len(dependencies),
         "capability_count": len(capabilities) if isinstance(capabilities, list) else 0,
     }
 

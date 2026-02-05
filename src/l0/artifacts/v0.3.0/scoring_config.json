@@ -1,0 +1,13 @@
+{
+  "version": "v0.1.0",
+  "freqs": {
+    "surface_total": 1760,
+    "lemma_total": 1760
+  },
+  "priors": {
+    "rare_token_penalty": 1.0,
+    "common_token_bonus": 0.5,
+    "unk_penalty": 2.0,
+    "lemma_bonus": 0.2
+  }
+}

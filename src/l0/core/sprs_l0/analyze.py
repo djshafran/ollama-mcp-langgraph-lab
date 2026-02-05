@@ -4,7 +4,8 @@ from typing import Any
 import os
 
 from .normalize import normalize_text
-from .spir import hash_artifacts_dir, hash_text, make_spir
+from .spir import DEFAULT_CAPABILITIES, hash_artifacts_dir, hash_text, make_spir
+from .syntax import build_dependencies
 
 
 def _simple_tokenize(text: str) -> list[dict[str, Any]]:
@@ -116,6 +117,12 @@ def analyze(
                 "conf": 1.0,
             }
         ]
+
+    syntax_backend = os.getenv("SYNTAX_BACKEND", "rules")
+    dependencies, syntax_meta = build_dependencies(
+        tokens=tokens, text=normalized, backend=syntax_backend
+    )
+    extra_meta.update(syntax_meta)
     artifacts_hash = hash_artifacts_dir(artifacts_dir)
     input_hash = hash_text(normalized)
     spir = make_spir(
@@ -124,7 +131,9 @@ def analyze(
         segments=segments,
         artifacts_hash=artifacts_hash,
         input_hash=input_hash,
+        dependencies=dependencies,
         input_format=input_format,
+        capabilities=list(DEFAULT_CAPABILITIES),
     )
     spir["meta"]["k_best"] = k_best
     spir["meta"]["return_lattice"] = return_lattice
@@ -136,4 +145,7 @@ def analyze(
             "lemma",
             "heritage_morphology",
         ]
+    if dependencies or extra_meta.get("syntax_backend") in {"rules", "hyderabad"}:
+        if "paninian_syntax" not in spir["capabilities"]:
+            spir["capabilities"].append("paninian_syntax")
     return spir
