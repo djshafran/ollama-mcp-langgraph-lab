@@ -119,7 +119,10 @@ def analyze(
         ]
 
     syntax_backend = os.getenv("SYNTAX_BACKEND", "rules")
-    dependencies, syntax_meta = build_dependencies(
+    syntax_backend = (syntax_backend or "rules").strip().lower()
+    if syntax_backend == "hydra":
+        syntax_backend = "hyderabad"
+    dependencies, ud_dependencies, syntax_meta = build_dependencies(
         tokens=tokens, text=normalized, backend=syntax_backend
     )
     extra_meta.update(syntax_meta)
@@ -132,6 +135,7 @@ def analyze(
         artifacts_hash=artifacts_hash,
         input_hash=input_hash,
         dependencies=dependencies,
+        ud_dependencies=ud_dependencies,
         input_format=input_format,
         capabilities=list(DEFAULT_CAPABILITIES),
     )
@@ -148,4 +152,6 @@ def analyze(
     if dependencies or extra_meta.get("syntax_backend") in {"rules", "hyderabad"}:
         if "paninian_syntax" not in spir["capabilities"]:
             spir["capabilities"].append("paninian_syntax")
+    if ud_dependencies and "ud_syntax" not in spir["capabilities"]:
+        spir["capabilities"].append("ud_syntax")
     return spir

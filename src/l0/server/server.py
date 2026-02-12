@@ -18,7 +18,7 @@ def l0_analyze(
     k_best: int = 5,
     return_lattice: bool = True,
 ) -> dict:
-    """Analyze input text into SPIR v0.1."""
+    """Analyze input text into SPIR v0.3.0."""
     return analyze(
         text,
         input_format=input_format,

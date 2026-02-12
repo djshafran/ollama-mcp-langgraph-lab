@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import os
 
 from .analyze import analyze
 from .validate import validate_spir
@@ -29,6 +30,8 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
 def cmd_analyze(args: argparse.Namespace) -> int:
     src = Path(args.input)
     dst = Path(args.output)
+    if args.syntax_backend:
+        os.environ["SYNTAX_BACKEND"] = args.syntax_backend
     rows = _read_jsonl(src)
     out_rows = []
     for i, row in enumerate(rows):
@@ -78,6 +81,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_an.add_argument("--k-best", type=int, default=5)
     p_an.add_argument("--no-lattice", action="store_true")
     p_an.add_argument("--artifacts-dir", default=None)
+    p_an.add_argument(
+        "--syntax-backend",
+        choices=["rules", "hydra", "hyderabad", "none", "off"],
+        help="Syntax parse backend",
+    )
     p_an.set_defaults(func=cmd_analyze)
 
     p_val = sub.add_parser("validate", help="Validate SPIR jsonl")

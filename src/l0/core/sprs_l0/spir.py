@@ -4,7 +4,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-SPIR_VERSION = "0.2.0"
+SPIR_VERSION = "0.3.0"
 DEFAULT_CAPABILITIES = [
     "normalize",
     "segment_lattice",
@@ -44,6 +44,7 @@ def spir_schema() -> dict[str, Any]:
             "segments",
             "capabilities",
             "dependencies",
+            "ud_dependencies",
         ],
         "properties": {
             "meta": {
@@ -55,6 +56,7 @@ def spir_schema() -> dict[str, Any]:
             "segments": {"type": "array"},
             "capabilities": {"type": "array"},
             "dependencies": {"type": "array"},
+            "ud_dependencies": {"type": "array"},
         },
     }
 
@@ -66,6 +68,7 @@ def make_spir(
     artifacts_hash: str,
     input_hash: str,
     dependencies: list[dict[str, Any]] | None = None,
+    ud_dependencies: list[dict[str, Any]] | None = None,
     capabilities: list[str] | None = None,
     input_format: str | None = None,
 ) -> dict[str, Any]:
@@ -80,5 +83,6 @@ def make_spir(
         "tokens": tokens,
         "segments": segments,
         "dependencies": dependencies or [],
+        "ud_dependencies": ud_dependencies or [],
         "capabilities": capabilities or list(DEFAULT_CAPABILITIES),
     }
