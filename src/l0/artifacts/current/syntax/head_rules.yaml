@@ -1,0 +1,11 @@
+version: 0.4.0
+rules:
+  - id: finite_verb_root
+    priority: 100
+    description: Select finite verb as root when present
+  - id: nominal_predication_root
+    priority: 80
+    description: Select nominal head as root in nonverbal predicates
+  - id: fallback_first_content
+    priority: 10
+    description: Use first content token as deterministic fallback

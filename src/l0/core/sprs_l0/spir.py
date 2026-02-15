@@ -4,12 +4,14 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-SPIR_VERSION = "0.3.0"
+SPIR_VERSION = "0.4.0"
 DEFAULT_CAPABILITIES = [
     "normalize",
     "segment_lattice",
     "lemma",
     "morph_stub",
+    "syntax_v04",
+    "kag_event_deontic",
 ]
 
 
@@ -43,8 +45,8 @@ def spir_schema() -> dict[str, Any]:
             "tokens",
             "segments",
             "capabilities",
-            "dependencies",
-            "ud_dependencies",
+            "syntax",
+            "semantics",
         ],
         "properties": {
             "meta": {
@@ -55,8 +57,9 @@ def spir_schema() -> dict[str, Any]:
             "tokens": {"type": "array"},
             "segments": {"type": "array"},
             "capabilities": {"type": "array"},
-            "dependencies": {"type": "array"},
-            "ud_dependencies": {"type": "array"},
+            "syntax": {"type": "object"},
+            "semantics": {"type": "object"},
+            "provenance": {"type": "object"},
         },
     }
 
@@ -67,10 +70,11 @@ def make_spir(
     segments: list[dict[str, Any]],
     artifacts_hash: str,
     input_hash: str,
-    dependencies: list[dict[str, Any]] | None = None,
-    ud_dependencies: list[dict[str, Any]] | None = None,
+    syntax: dict[str, Any] | None = None,
+    semantics: dict[str, Any] | None = None,
     capabilities: list[str] | None = None,
     input_format: str | None = None,
+    provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "meta": {
@@ -82,7 +86,8 @@ def make_spir(
         "normalized_text": normalized_text,
         "tokens": tokens,
         "segments": segments,
-        "dependencies": dependencies or [],
-        "ud_dependencies": ud_dependencies or [],
+        "syntax": syntax or {},
+        "semantics": semantics or {},
+        "provenance": provenance or {},
         "capabilities": capabilities or list(DEFAULT_CAPABILITIES),
     }

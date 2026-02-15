@@ -1,0 +1,7 @@
+{
+  "version": "0.4.0",
+  "node_types": ["Event", "Entity", "Norm", "State", "Source"],
+  "edge_types": ["ARG", "MODAL", "CAUSE", "CONDITION", "PURPOSE", "TEMPORAL", "SUPPORTS", "CONFLICTS", "GROUNDED_IN"],
+  "deontic_modalities": ["obligation", "prohibition", "permission", "right"],
+  "required_provenance_fields": ["token_ids", "clause_id", "source_ref"]
+}

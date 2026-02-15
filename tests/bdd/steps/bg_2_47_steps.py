@@ -31,7 +31,6 @@ def extract_text_47_block(md_text: str) -> list[str]:
                 continue
             if DEVANAGARI_RE.search(s):
                 out.append(s)
-
     return out
 
 
@@ -63,7 +62,6 @@ def step_given_file_contains_text_47(context, rel_path: str):
     context.bg_2_47_lines = block
     cleaned_all = [clean_devanagari(line) for line in block]
     cleaned_all = [line for line in cleaned_all if line]
-    # Prefer the line containing "धिकार"/"अधिकार" (sandhi may yield "आधिकार").
     adhikara_lines = [line for line in cleaned_all if ("अधिकार" in line or "धिकार" in line)]
     source_lines = adhikara_lines or cleaned_all
     context.bg_2_47_text = " ".join(source_lines)
@@ -98,6 +96,11 @@ def step_when_analyze(context):
             "input_format": "auto",
             "k_best": 5,
             "return_lattice": True,
+            "return_ud": True,
+            "return_syntax": True,
+            "include_enhanced": True,
+            "include_kag": True,
+            "include_provenance": True,
         },
     )
 
@@ -132,7 +135,6 @@ def step_then_contains_lemma(context, lemma: str):
             lemmas.append(t["lemma"])
 
     allure.attach("\n".join(lemmas), name="lemmas list", attachment_type=allure.attachment_type.TEXT)
-
     assert lemma in lemmas, f'Lemma "{lemma}" not found. Got: {lemmas}'
 
 
@@ -156,7 +158,7 @@ def step_then_has_heritage_details(context):
             found = True
             break
 
-    assert found, "No token contains feats.heritage.analyses (heritage backend not active or returned empty analyses)"
+    assert found, "No token contains feats.heritage.analyses"
 
 
 @then('SPIR capabilities include "{capability}"')
@@ -166,48 +168,63 @@ def step_then_capability_includes(context, capability: str):
 
     caps = spir.get("capabilities", [])
     assert isinstance(caps, list), "SPIR.capabilities must be list"
-
-    allure.attach(
-        "\n".join([str(c) for c in caps]),
-        name="capabilities list",
-        attachment_type=allure.attachment_type.TEXT,
-    )
-
     assert capability in caps, f'Capability "{capability}" not found. Got: {caps}'
 
 
-@then("SPIR dependencies are present")
-def step_then_dependencies_present(context):
+@then("SPIR paninian edges have roles")
+def step_then_paninian_roles(context):
     spir = getattr(context, "spir", None)
     assert isinstance(spir, dict), "SPIR missing or invalid"
-
-    deps = spir.get("dependencies", [])
-    assert isinstance(deps, list), "SPIR.dependencies must be list"
-
-    allure.attach(
-        json.dumps(deps, ensure_ascii=False, indent=2),
-        name="dependencies list",
-        attachment_type=allure.attachment_type.JSON,
-    )
-
-    assert len(deps) > 0, "SPIR.dependencies is empty"
-
-
-@then("SPIR dependencies have roles")
-def step_then_dependencies_have_roles(context):
-    spir = getattr(context, "spir", None)
-    assert isinstance(spir, dict), "SPIR missing or invalid"
-
-    deps = spir.get("dependencies", [])
-    assert isinstance(deps, list), "SPIR.dependencies must be list"
-
+    syntax = spir.get("syntax", {})
+    edges = syntax.get("paninian_edges", []) if isinstance(syntax, dict) else []
+    assert isinstance(edges, list), "SPIR.syntax.paninian_edges must be list"
     missing = []
-    for i, dep in enumerate(deps):
-        if not isinstance(dep, dict):
+    for i, edge in enumerate(edges):
+        if not isinstance(edge, dict):
             missing.append(i)
             continue
-        role = dep.get("role")
+        role = edge.get("role")
         if not isinstance(role, str) or not role.strip():
             missing.append(i)
+    assert not missing, f"Paninian edges missing role at indices: {missing}"
 
-    assert not missing, f"Dependencies missing role at indices: {missing}"
+
+@then('SPIR UD includes relation "{relation}"')
+def step_then_ud_has_relation(context, relation: str):
+    spir = getattr(context, "spir", None)
+    assert isinstance(spir, dict), "SPIR missing or invalid"
+    syntax = spir.get("syntax", {})
+    ud = syntax.get("ud", {}) if isinstance(syntax, dict) else {}
+    basic = ud.get("basic_edges", []) if isinstance(ud, dict) else []
+    rels = []
+    for edge in basic:
+        if isinstance(edge, dict):
+            rel = edge.get("rel") or edge.get("relation")
+            if isinstance(rel, str):
+                rels.append(rel)
+    assert relation in rels, f'UD relation "{relation}" not found. Got: {rels}'
+
+
+@then("SPIR has enhanced UD layer")
+def step_then_has_enhanced_ud(context):
+    spir = getattr(context, "spir", None)
+    assert isinstance(spir, dict), "SPIR missing or invalid"
+    syntax = spir.get("syntax", {})
+    ud = syntax.get("ud", {}) if isinstance(syntax, dict) else {}
+    enhanced = ud.get("enhanced_edges", []) if isinstance(ud, dict) else []
+    empty_nodes = ud.get("empty_nodes", []) if isinstance(ud, dict) else []
+    assert isinstance(enhanced, list), "enhanced_edges must be list"
+    assert isinstance(empty_nodes, list), "empty_nodes must be list"
+    assert len(enhanced) > 0 or len(empty_nodes) > 0, "Enhanced UD layer is empty"
+
+
+@then("SPIR has deontic norms")
+def step_then_has_deontic_norms(context):
+    spir = getattr(context, "spir", None)
+    assert isinstance(spir, dict), "SPIR missing or invalid"
+    semantics = spir.get("semantics", {})
+    kag = semantics.get("kag", {}) if isinstance(semantics, dict) else {}
+    norms = kag.get("norms", []) if isinstance(kag, dict) else []
+    assert isinstance(norms, list), "KAG norms must be list"
+    assert len(norms) > 0, "No deontic norms found in KAG"
+

@@ -6,6 +6,7 @@ from pathlib import Path
 import os
 
 from .analyze import analyze
+from .exporter import export_artifacts
 from .validate import validate_spir
 
 
@@ -30,8 +31,6 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
 def cmd_analyze(args: argparse.Namespace) -> int:
     src = Path(args.input)
     dst = Path(args.output)
-    if args.syntax_backend:
-        os.environ["SYNTAX_BACKEND"] = args.syntax_backend
     rows = _read_jsonl(src)
     out_rows = []
     for i, row in enumerate(rows):
@@ -50,6 +49,15 @@ def cmd_analyze(args: argparse.Namespace) -> int:
             k_best=args.k_best,
             return_lattice=not args.no_lattice,
             artifacts_dir=args.artifacts_dir,
+            syntax_backend=args.syntax_backend,
+            return_ud=args.ud,
+            return_syntax=True,
+            ud_mode=args.ud_mode,
+            include_enhanced=args.include_enhanced,
+            kag_mode=args.kag_mode,
+            include_provenance=args.include_provenance,
+            doc=row.get("doc"),
+            ref=row.get("ref"),
         )
         out_rows.append({"ref": row.get("ref"), "doc": row.get("doc"), "spir": spir})
     _write_jsonl(dst, out_rows)
@@ -70,11 +78,28 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0 if ok == total else 2
 
 
+def cmd_export(args: argparse.Namespace) -> int:
+    src = Path(args.input)
+    rows = _read_jsonl(src)
+    out_dir = Path(args.output_dir)
+    formats = [fmt.strip() for fmt in (args.formats or "").split(",") if fmt.strip()]
+    for idx, row in enumerate(rows, start=1):
+        spir = row.get("spir", row)
+        ref = row.get("ref") or f"row_{idx}"
+        row_dir = out_dir / str(ref).replace("/", "_")
+        export_artifacts(
+            spir,
+            formats=formats or None,
+            output_dir=row_dir,
+        )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="sprs_l0")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    p_an = sub.add_parser("analyze", help="Analyze corpus.jsonl into SPIR jsonl")
+    p_an = sub.add_parser("analyze", help="Analyze corpus.jsonl into SPIR v0.4 jsonl")
     p_an.add_argument("--in", dest="input", required=True)
     p_an.add_argument("--out", dest="output", required=True)
     p_an.add_argument("--limit", type=int, default=0)
@@ -84,13 +109,32 @@ def build_parser() -> argparse.ArgumentParser:
     p_an.add_argument(
         "--syntax-backend",
         choices=["rules", "hydra", "hyderabad", "none", "off"],
+        default=os.getenv("SYNTAX_BACKEND", "rules"),
         help="Syntax parse backend",
     )
+    p_an.add_argument("--ud-mode", choices=["basic", "none"], default="basic")
+    p_an.add_argument("--ud", dest="ud", action="store_true", default=True)
+    p_an.add_argument("--no-ud", dest="ud", action="store_false")
+    p_an.add_argument("--include-enhanced", dest="include_enhanced", action="store_true", default=True)
+    p_an.add_argument("--no-enhanced", dest="include_enhanced", action="store_false")
+    p_an.add_argument("--kag-mode", choices=["full", "none"], default="full")
+    p_an.add_argument("--include-provenance", dest="include_provenance", action="store_true", default=True)
+    p_an.add_argument("--no-provenance", dest="include_provenance", action="store_false")
     p_an.set_defaults(func=cmd_analyze)
 
-    p_val = sub.add_parser("validate", help="Validate SPIR jsonl")
+    p_val = sub.add_parser("validate", help="Validate SPIR v0.4 jsonl")
     p_val.add_argument("--in", dest="input", required=True)
     p_val.set_defaults(func=cmd_validate)
+
+    p_exp = sub.add_parser("export", help="Export sidecar artifacts from SPIR jsonl")
+    p_exp.add_argument("--in", dest="input", required=True)
+    p_exp.add_argument("--out-dir", dest="output_dir", required=True)
+    p_exp.add_argument(
+        "--formats",
+        default="conllu_basic,conllu_enhanced,kag_jsonl,align_json",
+        help="Comma separated list of formats",
+    )
+    p_exp.set_defaults(func=cmd_export)
 
     return p
 
@@ -103,3 +147,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

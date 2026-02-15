@@ -4,13 +4,13 @@ services:
     working_dir: /app
     command: ["python", "/app/tests/fixtures/hydra_mock/app.py"]
     volumes:
-      - ./:/app
+      - ../../:/app
     expose:
       - "8080"
 
   l0:
     build:
-      context: .
+      context: ../..
       dockerfile: src/l0/server/Dockerfile
     depends_on:
       - hydra_mock
@@ -30,6 +30,6 @@ services:
     ports:
       - "8000"
     volumes:
-      - ./src/l0/artifacts:/artifacts
-      - ./src/l0/data:/data:ro
-      - ./third_party/heritage/Heritage_Platform:/opt/Heritage_Platform:ro
+      - ../../src/l0/artifacts:/artifacts
+      - ../../src/l0/data:/data:ro
+      - ../../third_party/heritage/Heritage_Platform:/opt/Heritage_Platform:ro

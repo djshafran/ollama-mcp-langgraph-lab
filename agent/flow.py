@@ -9,13 +9,6 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.graph import StateGraph, END
 
 
-def _env_bool(name: str, default: bool = False) -> bool:
-    v = os.getenv(name)
-    if v is None:
-        return default
-    return v.strip().lower() in ("1", "true", "yes", "y", "on")
-
-
 def _env_reasoning() -> bool | None:
     v = os.getenv("THINKING_TRACE", "").strip().lower()
     if not v:
@@ -29,10 +22,10 @@ def _env_reasoning() -> bool | None:
 
 class FlowState(TypedDict, total=False):
     query: str
-    query_spir: dict
-    plan: dict
-    passages: list
-    compact: dict
+    spir: dict
+    query_bundle: dict
+    retrieved: dict
+    evidence_pack: dict
     facts: dict
     answer: str
 
@@ -43,7 +36,6 @@ def _llm_from_env() -> ChatOllama:
     temperature = float(os.getenv("TEMPERATURE", "0.2"))
     num_ctx = int(os.getenv("NUM_CTX", "2048"))
     reasoning = _env_reasoning()
-
     return ChatOllama(
         model=model_name,
         base_url=ollama_base_url,
@@ -73,6 +65,7 @@ async def _tool_map() -> dict[str, Any]:
                     tool_map[short] = tool
     return tool_map
 
+
 async def _call_tool(tool_map: dict[str, Any], name: str, payload: dict) -> Any:
     tool = tool_map.get(name)
     if not tool:
@@ -80,76 +73,58 @@ async def _call_tool(tool_map: dict[str, Any], name: str, payload: dict) -> Any:
     return await tool.ainvoke(payload)
 
 
-async def _pivot(tool_map: dict[str, Any], state: FlowState) -> FlowState:
-    query = state["query"]
-    spir = await _call_tool(tool_map, "l0_analyze", {"text": query})
-    return {"query_spir": spir}
-
-
-async def _plan(llm: ChatOllama, tool_map: dict[str, Any], state: FlowState) -> FlowState:
-    backend = os.getenv("PLAN_BACKEND", "llm").strip().lower()
-    if backend == "l0":
-        keys = await _call_tool(
-            tool_map,
-            "l0_keys",
-            {"query_spir": state["query_spir"], "max_terms": 12},
-        )
-        plan = {
-            "backend": "l0",
-            "keywords": keys.get("keywords", []),
-            "steps": ["retrieve", "compress", "reconcile", "answer"],
-        }
-        return {"plan": plan}
-    if backend == "rules":
-        plan = {
-            "backend": "rules",
-            "steps": ["retrieve", "compress", "reconcile", "answer"],
-        }
-        return {"plan": plan}
-
-    prompt = (
-        "Create a strict JSON plan with fields: steps (array of strings), rationale."
+async def _analyze(tool_map: dict[str, Any], state: FlowState) -> FlowState:
+    spir = await _call_tool(
+        tool_map,
+        "l0_analyze",
+        {
+            "text": state["query"],
+            "include_kag": True,
+            "include_provenance": True,
+            "include_enhanced": True,
+        },
     )
-    response = await llm.ainvoke([
-        {"role": "system", "content": prompt},
-        {"role": "user", "content": state["query"]},
-    ])
-    text = getattr(response, "content", str(response))
-    try:
-        plan = json.loads(text)
-    except json.JSONDecodeError:
-        plan = {"backend": "llm", "raw": text}
-    return {"plan": plan}
+    return {"spir": spir}
+
+
+async def _query_understand(tool_map: dict[str, Any], state: FlowState) -> FlowState:
+    query_bundle = await _call_tool(
+        tool_map,
+        "l0_query_understand",
+        {"spir": state["spir"], "max_terms": 12},
+    )
+    return {"query_bundle": query_bundle}
 
 
 async def _retrieve(tool_map: dict[str, Any], state: FlowState) -> FlowState:
-    passages = []
-    try:
-        files = await _call_tool(tool_map, "list_files", {"rel_dir": "kb"})
-    except Exception:
-        files = []
+    bundle = state.get("query_bundle", {})
+    kag_query = bundle.get("kag_query", {})
+    plan = bundle.get("retrieval_plan", {})
+    retrieved = await _call_tool(
+        tool_map,
+        "l0_retrieve",
+        {
+            "kag_query": kag_query,
+            "top_k": 5,
+            "filters": plan.get("filters") or {},
+        },
+    )
+    return {"retrieved": retrieved}
 
-    txt_files = [f for f in files if str(f).endswith(".txt")]
-    for fp in txt_files[:5]:
-        try:
-            text = await _call_tool(tool_map, "read_text", {"rel_path": fp})
-            passages.append({"id": fp, "text": text})
-        except Exception:
-            continue
-    return {"passages": passages}
 
-
-async def _compress(tool_map: dict[str, Any], state: FlowState) -> FlowState:
+async def _evidence_pack(tool_map: dict[str, Any], state: FlowState) -> FlowState:
+    candidates = (state.get("retrieved") or {}).get("candidates", [])
+    passages = [{"id": c.get("id"), "text": c.get("text", "")} for c in candidates]
     compact = await _call_tool(
         tool_map,
         "l0_compress",
         {
-            "query_spir": state["query_spir"],
-            "passages": state.get("passages", []),
-            "max_chars": 2000,
+            "query_spir": state["spir"],
+            "passages": passages,
+            "max_chars": 2500,
         },
     )
-    return {"compact": compact}
+    return {"evidence_pack": compact}
 
 
 async def _reconcile(llm: ChatOllama, state: FlowState) -> FlowState:
@@ -157,11 +132,21 @@ async def _reconcile(llm: ChatOllama, state: FlowState) -> FlowState:
     if backend == "rules":
         return {"facts": {"facts": []}}
 
-    prompt = "Extract key facts as strict JSON with field 'facts' (array)."
-    response = await llm.ainvoke([
-        {"role": "system", "content": prompt},
-        {"role": "user", "content": json.dumps(state.get("compact", {}))},
-    ])
+    prompt = "Extract key facts as strict JSON with field 'facts' (array) and include provenance when possible."
+    payload = {
+        "query": state.get("query"),
+        "spir_meta": (state.get("spir") or {}).get("meta"),
+        "kag_norms": ((((state.get("spir") or {}).get("semantics") or {}).get("kag") or {}).get("norms"))
+        or [],
+        "retrieved": state.get("retrieved"),
+        "evidence_pack": state.get("evidence_pack"),
+    }
+    response = await llm.ainvoke(
+        [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+        ]
+    )
     text = getattr(response, "content", str(response))
     try:
         facts = json.loads(text)
@@ -171,19 +156,22 @@ async def _reconcile(llm: ChatOllama, state: FlowState) -> FlowState:
 
 
 async def _answer(llm: ChatOllama, state: FlowState) -> FlowState:
-    prompt = "Answer the user using the provided evidence. Be concise."
+    prompt = (
+        "Answer the user concisely using facts and evidence. "
+        "Always mention provenance references when available."
+    )
     payload = {
         "query": state["query"],
-        "plan": state.get("plan"),
-        "compact": state.get("compact"),
         "facts": state.get("facts"),
+        "provenance": (state.get("retrieved") or {}).get("provenance"),
     }
-    response = await llm.ainvoke([
-        {"role": "system", "content": prompt},
-        {"role": "user", "content": json.dumps(payload)},
-    ])
-    text = getattr(response, "content", str(response))
-    return {"answer": text}
+    response = await llm.ainvoke(
+        [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+        ]
+    )
+    return {"answer": getattr(response, "content", str(response))}
 
 
 async def run_once(prompt: str) -> None:
@@ -192,36 +180,36 @@ async def run_once(prompt: str) -> None:
 
     graph = StateGraph(FlowState)
 
-    async def pivot(state: FlowState) -> FlowState:
-        return await _pivot(tools, state)
+    async def analyze_node(state: FlowState) -> FlowState:
+        return await _analyze(tools, state)
 
-    async def plan(state: FlowState) -> FlowState:
-        return await _plan(llm, tools, state)
+    async def query_node(state: FlowState) -> FlowState:
+        return await _query_understand(tools, state)
 
-    async def retrieve(state: FlowState) -> FlowState:
+    async def retrieve_node(state: FlowState) -> FlowState:
         return await _retrieve(tools, state)
 
-    async def compress(state: FlowState) -> FlowState:
-        return await _compress(tools, state)
+    async def evidence_node(state: FlowState) -> FlowState:
+        return await _evidence_pack(tools, state)
 
-    async def reconcile(state: FlowState) -> FlowState:
+    async def reconcile_node(state: FlowState) -> FlowState:
         return await _reconcile(llm, state)
 
-    async def answer(state: FlowState) -> FlowState:
+    async def answer_node(state: FlowState) -> FlowState:
         return await _answer(llm, state)
 
-    graph.add_node("pivot", pivot)
-    graph.add_node("plan", plan)
-    graph.add_node("retrieve", retrieve)
-    graph.add_node("compress", compress)
-    graph.add_node("reconcile", reconcile)
-    graph.add_node("answer", answer)
+    graph.add_node("analyze", analyze_node)
+    graph.add_node("query_understand", query_node)
+    graph.add_node("retrieve", retrieve_node)
+    graph.add_node("evidence_pack", evidence_node)
+    graph.add_node("reconcile", reconcile_node)
+    graph.add_node("answer", answer_node)
 
-    graph.set_entry_point("pivot")
-    graph.add_edge("pivot", "plan")
-    graph.add_edge("plan", "retrieve")
-    graph.add_edge("retrieve", "compress")
-    graph.add_edge("compress", "reconcile")
+    graph.set_entry_point("analyze")
+    graph.add_edge("analyze", "query_understand")
+    graph.add_edge("query_understand", "retrieve")
+    graph.add_edge("retrieve", "evidence_pack")
+    graph.add_edge("evidence_pack", "reconcile")
     graph.add_edge("reconcile", "answer")
     graph.add_edge("answer", END)
 
@@ -250,3 +238,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+

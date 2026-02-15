@@ -3,7 +3,16 @@ from pathlib import Path
 
 from fastmcp import FastMCP
 
-from sprs_l0 import analyze, compress_passages, constraints, extract_keys, validate_spir
+from sprs_l0 import (
+    analyze,
+    compress_passages,
+    constraints,
+    export_artifacts,
+    extract_keys,
+    query_understand,
+    retrieve_candidates,
+    validate_spir,
+)
 
 mcp = FastMCP("L0")
 
@@ -17,14 +26,82 @@ def l0_analyze(
     input_format: str = "auto",
     k_best: int = 5,
     return_lattice: bool = True,
+    syntax_backend: str | None = None,
+    return_ud: bool = True,
+    return_syntax: bool = True,
+    ud_mode: str = "basic",
+    include_enhanced: bool = True,
+    include_kag: bool = True,
+    include_provenance: bool = True,
+    doc: str | None = None,
+    ref: str | None = None,
 ) -> dict:
-    """Analyze input text into SPIR v0.3.0."""
+    """Analyze input text into SPIR v0.4 with syntax + KAG."""
     return analyze(
         text,
         input_format=input_format,
         k_best=k_best,
         return_lattice=return_lattice,
         artifacts_dir=str(ARTIFACT_DIR),
+        syntax_backend=syntax_backend,
+        return_ud=return_ud,
+        return_syntax=return_syntax,
+        ud_mode=ud_mode,
+        include_enhanced=include_enhanced,
+        kag_mode="full" if include_kag else "none",
+        include_provenance=include_provenance,
+        doc=doc,
+        ref=ref,
+    )
+
+
+@mcp.tool()
+def l0_query_understand(
+    text: str | None = None,
+    spir: dict | None = None,
+    max_terms: int = 12,
+) -> dict:
+    """Build KAG-aware query plan from text or SPIR."""
+
+    def _analyzer(payload: str) -> dict:
+        return analyze(payload, artifacts_dir=str(ARTIFACT_DIR), kag_mode="full")
+
+    return query_understand(
+        text=text,
+        spir=spir,
+        analyzer=_analyzer,
+        max_terms=max_terms,
+    )
+
+
+@mcp.tool()
+def l0_retrieve(
+    kag_query: dict,
+    top_k: int = 5,
+    filters: dict | None = None,
+    corpus_path: str | None = None,
+) -> dict:
+    """Hybrid retrieval (BM25+vector+RRF+rerank) over artifact corpus."""
+    return retrieve_candidates(
+        kag_query,
+        top_k=top_k,
+        filters=filters,
+        corpus_path=corpus_path,
+        artifacts_dir=str(ARTIFACT_DIR),
+    )
+
+
+@mcp.tool()
+def l0_export(
+    spir: dict,
+    formats: list[str] | None = None,
+    output_dir: str | None = None,
+) -> dict:
+    """Export sidecar artifacts: conllu_basic, conllu_enhanced, kag_jsonl, align_json."""
+    return export_artifacts(
+        spir,
+        formats=formats,
+        output_dir=output_dir,
     )
 
 
@@ -52,7 +129,7 @@ def l0_compress(
 
 @mcp.tool()
 def l0_validate(spir: dict) -> dict:
-    """Validate SPIR structure."""
+    """Validate SPIR v0.4 structure."""
     return validate_spir(spir)
 
 
@@ -66,3 +143,4 @@ if __name__ == "__main__":
     host = os.getenv("MCP_HOST", "0.0.0.0")
     port = int(os.getenv("MCP_PORT", "8000"))
     mcp.run(transport="http", host=host, port=port)
+

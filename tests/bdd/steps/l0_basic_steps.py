@@ -46,6 +46,11 @@ def step_when_analyze_text(context):
             "input_format": "auto",
             "k_best": 5,
             "return_lattice": True,
+            "return_ud": True,
+            "return_syntax": True,
+            "include_enhanced": True,
+            "include_kag": True,
+            "include_provenance": True,
         },
     )
 
@@ -94,3 +99,49 @@ def step_then_validate_spir(context):
 
     assert isinstance(result, dict), f"Validate response invalid: {result!r}"
     assert result.get("ok") is True, f"SPIR validation failed: {result}"
+
+
+@then("SPIR syntax paninian edges are present")
+def step_then_paninian_edges_present(context):
+    spir = getattr(context, "spir", None)
+    assert isinstance(spir, dict), "SPIR missing or invalid"
+    syntax = spir.get("syntax", {})
+    assert isinstance(syntax, dict), "SPIR.syntax must be object"
+    edges = syntax.get("paninian_edges", [])
+    assert isinstance(edges, list), "SPIR.syntax.paninian_edges must be list"
+    assert len(edges) > 0, "SPIR.syntax.paninian_edges is empty"
+
+
+@then("SPIR tokens are present")
+def step_then_tokens_present(context):
+    spir = getattr(context, "spir", None)
+    assert isinstance(spir, dict), "SPIR missing or invalid"
+    tokens = spir.get("tokens", [])
+    assert isinstance(tokens, list), "SPIR.tokens must be list"
+    assert len(tokens) > 0, "SPIR.tokens is empty"
+
+
+@then("SPIR UD basic edges are present")
+def step_then_ud_basic_edges_present(context):
+    spir = getattr(context, "spir", None)
+    assert isinstance(spir, dict), "SPIR missing or invalid"
+    syntax = spir.get("syntax", {})
+    ud = syntax.get("ud", {}) if isinstance(syntax, dict) else {}
+    basic = ud.get("basic_edges", []) if isinstance(ud, dict) else []
+    assert isinstance(basic, list), "SPIR.syntax.ud.basic_edges must be list"
+    assert len(basic) > 0, "SPIR.syntax.ud.basic_edges is empty"
+
+
+@then("SPIR has KAG graph")
+def step_then_has_kag(context):
+    spir = getattr(context, "spir", None)
+    assert isinstance(spir, dict), "SPIR missing or invalid"
+    semantics = spir.get("semantics", {})
+    assert isinstance(semantics, dict), "SPIR.semantics must be object"
+    kag = semantics.get("kag", {})
+    assert isinstance(kag, dict), "SPIR.semantics.kag must be object"
+    nodes = kag.get("nodes", [])
+    edges = kag.get("edges", [])
+    assert isinstance(nodes, list), "KAG nodes must be list"
+    assert isinstance(edges, list), "KAG edges must be list"
+    assert len(nodes) > 0, "KAG nodes are empty"

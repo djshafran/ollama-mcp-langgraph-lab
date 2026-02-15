@@ -11,7 +11,7 @@ from tests.bdd.support.mcp_http import McpHttpClient
 
 def before_all(context):
     project_root = Path(__file__).resolve().parents[2]
-    compose_file = os.getenv("BDD_COMPOSE_FILE", "docker-compose.bdd.yml")
+    compose_file = os.getenv("BDD_COMPOSE_FILE", "tests/compose/docker-compose.test.yml")
 
     context.compose = DockerCompose(
         context=str(project_root),

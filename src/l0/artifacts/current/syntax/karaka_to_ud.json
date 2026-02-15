@@ -1,0 +1,15 @@
+{
+  "version": "0.4.0",
+  "mapping": {
+    "kartṛ": "nsubj",
+    "karman": "obj",
+    "karaṇa": "obl:inst",
+    "saṃpradāna": "iobj",
+    "apādāna": "obl:abl",
+    "adhikaraṇa": "obl:loc",
+    "sambandha": "nmod:poss",
+    "vocative": "vocative",
+    "root": "root",
+    "dep": "dep"
+  }
+}

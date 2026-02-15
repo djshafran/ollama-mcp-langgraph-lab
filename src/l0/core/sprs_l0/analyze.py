@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 import os
 
+from .clause import build_clause_graph
+from .contracts_v04 import make_semantics, make_syntax
+from .eud import build_enhanced_ud
+from .kag import build_kag_from_syntax
 from .normalize import normalize_text
+from .overrides import apply_overrides, load_overrides
 from .spir import DEFAULT_CAPABILITIES, hash_artifacts_dir, hash_text, make_spir
-from .syntax import build_dependencies
+from .syntax import analyze_syntax
+from .ud import load_karaka_ud_mapping, map_karaka_to_ud, validate_basic_ud_tree
 
 
 def _simple_tokenize(text: str) -> list[dict[str, Any]]:
@@ -57,7 +64,7 @@ def _heritage_tokenize(text: str) -> tuple[list[dict[str, Any]], dict[str, Any]]
                 }
             )
     else:
-        words = sol.get("words", [])
+        words = sol.get("words", []) if isinstance(sol, dict) else []
         for variants in words:
             if not variants:
                 continue
@@ -65,18 +72,12 @@ def _heritage_tokenize(text: str) -> tuple[list[dict[str, Any]], dict[str, Any]]
             surface = best.get("text") or ""
             root = best.get("root") or surface
             analyses = best.get("analyses") or []
-
             tokens.append(
                 {
                     "surface": surface,
                     "lemma": root,
                     "pos": None,
-                    "feats": {
-                        "heritage": {
-                            "solution_id": sol_id,
-                            "analyses": analyses,
-                        }
-                    },
+                    "feats": {"heritage": {"solution_id": sol_id, "analyses": analyses}},
                     "conf": 1.0,
                 }
             )
@@ -85,19 +86,48 @@ def _heritage_tokenize(text: str) -> tuple[list[dict[str, Any]], dict[str, Any]]
     return tokens, meta
 
 
+def _resolve_syntax_overrides_path(artifacts_dir: str | Path | None) -> str | None:
+    env_path = os.getenv("SYNTAX_OVERRIDES_PATH", "").strip()
+    if env_path:
+        return env_path
+    if artifacts_dir:
+        candidate = Path(artifacts_dir) / "syntax" / "overrides.jsonl"
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
 def analyze(
     text: str,
     input_format: str = "auto",
     k_best: int = 5,
     return_lattice: bool = True,
     artifacts_dir: str | None = None,
+    syntax_backend: str | None = None,
+    return_ud: bool = True,
+    return_syntax: bool = True,
+    ud_mode: str = "basic",
+    include_enhanced: bool = True,
+    kag_mode: str = "full",
+    include_provenance: bool = True,
+    doc: str | None = None,
+    ref: str | None = None,
 ) -> dict[str, Any]:
     normalized = normalize_text(text)
+
     backend = os.getenv("L0_BACKEND", "simple").strip().lower() or "simple"
     extra_meta: dict[str, Any] = {}
     if backend == "heritage":
         try:
             tokens, extra_meta = _heritage_tokenize(normalized)
+            if normalized and not tokens:
+                # Deterministic fallback to keep pipeline usable when Heritage returns no analysis.
+                tokens = _simple_tokenize(normalized)
+                extra_meta = {
+                    "backend": "simple",
+                    "fallback_from": "heritage",
+                    "warning": "heritage returned empty tokenization",
+                }
         except Exception as exc:
             tokens = _simple_tokenize(normalized)
             extra_meta = {
@@ -111,47 +141,152 @@ def analyze(
 
     segments: list[dict[str, Any]] = []
     if return_lattice and tokens:
-        segments = [
-            {
-                "tokens": list(range(len(tokens))),
-                "conf": 1.0,
-            }
-        ]
+        segments = [{"tokens": list(range(len(tokens))), "conf": 1.0}]
 
-    syntax_backend = os.getenv("SYNTAX_BACKEND", "rules")
-    syntax_backend = (syntax_backend or "rules").strip().lower()
-    if syntax_backend == "hydra":
-        syntax_backend = "hyderabad"
-    dependencies, ud_dependencies, syntax_meta = build_dependencies(
-        tokens=tokens, text=normalized, backend=syntax_backend
+    syntax_backend_value = (
+        (syntax_backend or os.getenv("SYNTAX_BACKEND", "rules")).strip().lower()
     )
-    extra_meta.update(syntax_meta)
+    if syntax_backend_value == "hydra":
+        syntax_backend_value = "hyderabad"
+
+    paninian_edges: list[dict[str, Any]] = []
+    syntax_meta: dict[str, Any] = {"errors": [], "warnings": [], "overrides_applied": False}
+    if return_syntax:
+        paninian_edges, _, syntax_meta_backend = analyze_syntax(
+            text=normalized,
+            tokens=tokens,
+            backend=syntax_backend_value,
+        )
+        syntax_meta.update(syntax_meta_backend)
+
+    map_path = os.getenv("KARAKA_UD_MAP_PATH", "").strip() or None
+    ud_mapping, mapping_version = load_karaka_ud_mapping(
+        artifacts_dir=artifacts_dir,
+        mapping_path=map_path,
+    )
+    syntax_meta["mapping_version"] = mapping_version
+
+    basic_ud: list[dict[str, Any]] = []
+    if return_ud and paninian_edges:
+        basic_ud, map_meta = map_karaka_to_ud(paninian_edges, tokens=tokens, mapping=ud_mapping)
+        syntax_meta["warnings"].extend(map_meta.get("warnings") or [])
+        syntax_meta["errors"].extend(map_meta.get("errors") or [])
+
+    if return_ud and ud_mode == "none":
+        basic_ud = []
+
+    clauses: list[dict[str, Any]] = []
+    discourse_links: list[dict[str, Any]] = []
+    if return_syntax and basic_ud:
+        clauses, discourse_links = build_clause_graph(tokens=tokens, basic_edges=basic_ud)
+
+    enhanced_ud: list[dict[str, Any]] = []
+    empty_nodes: list[dict[str, Any]] = []
+    if return_ud and include_enhanced and basic_ud:
+        enhanced_ud, empty_nodes, eud_meta = build_enhanced_ud(
+            tokens=tokens,
+            basic_edges=basic_ud,
+            clauses=clauses,
+        )
+        syntax_meta["warnings"].extend(eud_meta.get("warnings") or [])
+
+    # Apply per-input golden overrides.
+    overrides_path = _resolve_syntax_overrides_path(artifacts_dir)
+    overrides_index = load_overrides(overrides_path)
+    if overrides_index:
+        provisional = {
+            "meta": {
+                "input_hash": hash_text(normalized),
+            },
+            "syntax": {
+                "paninian_edges": paninian_edges,
+                "ud": {"basic_edges": basic_ud},
+                "meta": {"overrides_applied": False},
+            },
+        }
+        provisional, applied, needs_ud_recompute, override_warnings = apply_overrides(
+            provisional, overrides_index, doc=doc, ref=ref
+        )
+        syntax_meta["warnings"].extend(override_warnings)
+        syntax_meta["overrides_applied"] = bool(applied)
+        if applied:
+            paninian_edges = provisional["syntax"]["paninian_edges"]
+            if needs_ud_recompute:
+                basic_ud, map_meta = map_karaka_to_ud(paninian_edges, tokens=tokens, mapping=ud_mapping)
+                syntax_meta["warnings"].extend(map_meta.get("warnings") or [])
+                syntax_meta["errors"].extend(map_meta.get("errors") or [])
+            else:
+                basic_ud = provisional["syntax"]["ud"]["basic_edges"]
+
+    if basic_ud:
+        ok_ud, ud_errors, ud_warnings = validate_basic_ud_tree(tokens=tokens, basic_edges=basic_ud)
+        if not ok_ud:
+            syntax_meta["errors"].extend(ud_errors)
+        syntax_meta["warnings"].extend(ud_warnings)
+
+    syntax = make_syntax(
+        backend=str(syntax_meta.get("syntax_backend") or syntax_backend_value or "none"),
+        paninian_edges=paninian_edges,
+        ud_basic_edges=basic_ud,
+        ud_enhanced_edges=enhanced_ud,
+        ud_empty_nodes=empty_nodes,
+        clauses=clauses,
+        discourse_links=discourse_links,
+        meta={
+            "mapping_version": syntax_meta.get("mapping_version") or "builtin",
+            "overrides_applied": bool(syntax_meta.get("overrides_applied")),
+            "errors": syntax_meta.get("errors") or [],
+            "warnings": syntax_meta.get("warnings") or [],
+            "fallback_from": syntax_meta.get("syntax_fallback_from"),
+            "error": syntax_meta.get("syntax_error"),
+        },
+    )
+
     artifacts_hash = hash_artifacts_dir(artifacts_dir)
     input_hash = hash_text(normalized)
+    provenance: dict[str, Any] = {}
+    if include_provenance:
+        provenance = {
+            "source_ref": input_hash,
+            "token_count": len(tokens),
+            "layers": ["raw", "normalize", "syntax", "kag"],
+        }
+
     spir = make_spir(
         normalized_text=normalized,
         tokens=tokens,
         segments=segments,
         artifacts_hash=artifacts_hash,
         input_hash=input_hash,
-        dependencies=dependencies,
-        ud_dependencies=ud_dependencies,
+        syntax=syntax,
+        semantics=make_semantics(),
         input_format=input_format,
         capabilities=list(DEFAULT_CAPABILITIES),
+        provenance=provenance,
     )
     spir["meta"]["k_best"] = k_best
     spir["meta"]["return_lattice"] = return_lattice
+    spir["meta"]["ud_mode"] = ud_mode
+    spir["meta"]["include_enhanced"] = include_enhanced
+    spir["meta"]["kag_mode"] = kag_mode
     spir["meta"].update(extra_meta)
+
     if extra_meta.get("backend") == "heritage":
-        spir["capabilities"] = [
-            "normalize",
-            "segment_lattice",
-            "lemma",
-            "heritage_morphology",
-        ]
-    if dependencies or extra_meta.get("syntax_backend") in {"rules", "hyderabad"}:
-        if "paninian_syntax" not in spir["capabilities"]:
-            spir["capabilities"].append("paninian_syntax")
-    if ud_dependencies and "ud_syntax" not in spir["capabilities"]:
+        if "heritage_morphology" not in spir["capabilities"]:
+            spir["capabilities"].append("heritage_morphology")
+    if paninian_edges and "paninian_syntax" not in spir["capabilities"]:
+        spir["capabilities"].append("paninian_syntax")
+    if basic_ud and "ud_syntax" not in spir["capabilities"]:
         spir["capabilities"].append("ud_syntax")
+    if clauses and "clause_graph" not in spir["capabilities"]:
+        spir["capabilities"].append("clause_graph")
+    if enhanced_ud and "enhanced_ud" not in spir["capabilities"]:
+        spir["capabilities"].append("enhanced_ud")
+
+    if kag_mode.lower() == "full":
+        kag = build_kag_from_syntax(spir, artifacts_dir=artifacts_dir)
+        spir["semantics"] = make_semantics(kag=kag)
+        if "kag_full" not in spir["capabilities"]:
+            spir["capabilities"].append("kag_full")
+
     return spir

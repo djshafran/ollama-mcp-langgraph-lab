@@ -1,0 +1,9 @@
+{
+  "version": "0.4.0",
+  "modality_markers": {
+    "obligation": ["must", "should", "kartavya", "कर्तव्य"],
+    "prohibition": ["not", "never", "mā", "मा"],
+    "permission": ["may", "allowed", "anumati", "अनुमति"],
+    "right": ["right", "adhikara", "adhikāra", "अधिकार"]
+  }
+}

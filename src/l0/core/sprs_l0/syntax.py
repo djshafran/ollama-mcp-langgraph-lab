@@ -416,8 +416,28 @@ def to_ud_dependencies(dependencies: list[dict[str, Any]]) -> list[dict[str, Any
     for dep in dependencies:
         role = normalize_role(dep.get("role"))
         relation = UD_ROLE_MAP.get(role, "dep")
-        ud_deps.append({"head": dep.get("head"), "dep": dep.get("dep"), "relation": relation})
+        ud_deps.append({"head": dep.get("head"), "dep": dep.get("dep"), "rel": relation})
     return ud_deps
+
+
+def build_karaka_rules(
+    tokens: list[dict[str, Any]],
+    text: str | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    del text  # not used in the rules implementation yet
+    deps = _rules_dependencies(tokens)
+    return deps, {"syntax_backend": "rules"}
+
+
+def parse_karaka_hyderabad(
+    text: str,
+    tokens: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    from .backends.hyderabad_backend import parse_dependencies
+
+    raw_deps = parse_dependencies(text=text, tokens=tokens)
+    deps = normalize_dependencies(raw_deps, token_count=len(tokens))
+    return deps, {"syntax_backend": "hyderabad"}
 
 
 def analyze_syntax(
@@ -432,25 +452,22 @@ def analyze_syntax(
 
     if backend == "hyderabad":
         try:
-            from .backends.hyderabad_backend import parse_dependencies
-
-            raw_deps = parse_dependencies(text=text, tokens=tokens)
-            deps = normalize_dependencies(raw_deps, token_count=len(tokens))
-            return deps, to_ud_dependencies(deps), {"syntax_backend": "hyderabad"}
+            deps, meta = parse_karaka_hyderabad(text=text, tokens=tokens)
+            return deps, to_ud_dependencies(deps), meta
         except Exception as exc:  # pragma: no cover - fallback path
-            deps = _rules_dependencies(tokens)
+            deps, meta = build_karaka_rules(tokens=tokens, text=text)
             return (
                 deps,
                 to_ud_dependencies(deps),
                 {
-                    "syntax_backend": "rules",
+                    **meta,
                     "syntax_fallback_from": "hyderabad",
                     "syntax_error": str(exc),
                 },
             )
 
-    deps = _rules_dependencies(tokens)
-    return deps, to_ud_dependencies(deps), {"syntax_backend": "rules"}
+    deps, meta = build_karaka_rules(tokens=tokens, text=text)
+    return deps, to_ud_dependencies(deps), meta
 
 
 def build_dependencies(
@@ -477,7 +494,7 @@ def ud_to_conllu(tokens: list[dict[str, Any]], ud_deps: list[dict[str, Any]]) ->
             pos = "_"
         dep = dep_map.get(idx - 1, {})
         head = dep.get("head")
-        rel = dep.get("relation") or "dep"
+        rel = dep.get("rel") or dep.get("relation") or "dep"
         head_idx = 0
         if isinstance(head, int):
             head_idx = head + 1
