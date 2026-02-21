@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sprs-l0.local/schemas/ud_enhanced.schema.json",
+  "title": "SPIR v0.5 UD Enhanced",
+  "type": "object",
+  "required": ["enhanced_edges", "empty_nodes"],
+  "properties": {
+    "enhanced_edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["head", "dep", "rel"],
+        "properties": {
+          "head": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "string",
+                "pattern": "^[0-9]+\\.[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dep": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "string",
+                "pattern": "^[0-9]+\\.[0-9]+$"
+              }
+            ]
+          },
+          "rel": {
+            "type": "string",
+            "minLength": 1
+          },
+          "conf": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "empty_nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "anchor_token_id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+$"
+          },
+          "anchor_token_id": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "predicate": {
+            "type": "string"
+          },
+          "source_clause": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conf": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sprs-l0.local/schemas/kag.schema.json",
+  "title": "SPIR v0.5 KAG",
+  "type": "object",
+  "required": ["version", "nodes", "edges", "norms"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^0\\.5\\."
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "provenance"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": ["Event", "Entity", "Norm", "State", "Source"]
+          },
+          "label": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object"
+          },
+          "provenance": {
+            "$ref": "#/$defs/provenance"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["src", "dst", "type", "provenance"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "src": {
+            "type": "string",
+            "minLength": 1
+          },
+          "dst": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "ARG",
+              "MODAL",
+              "CAUSE",
+              "CONDITION",
+              "PURPOSE",
+              "TEMPORAL",
+              "SUPPORTS",
+              "CONFLICTS",
+              "GROUNDED_IN"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object"
+          },
+          "provenance": {
+            "$ref": "#/$defs/provenance"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "norms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "modality", "target_event_id", "provenance"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "modality": {
+            "type": "string",
+            "enum": ["obligation", "prohibition", "permission", "right"]
+          },
+          "target_event_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "norm_node_id": {
+            "type": "string"
+          },
+          "evidence_text": {
+            "type": "string"
+          },
+          "provenance": {
+            "$ref": "#/$defs/provenance"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "$defs": {
+    "provenance": {
+      "type": "object",
+      "required": ["token_ids", "source_ref"],
+      "properties": {
+        "token_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "clause_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

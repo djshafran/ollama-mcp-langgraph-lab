@@ -65,25 +65,25 @@ def build_clause_graph(
     for i, tok in enumerate(tokens):
         text = _norm_surface(tok)
         if text in PUNCT_MARKERS and start <= i:
-            end = i - 1
-            if end >= start:
+            end = i
+            if end > start:
                 spans.append((start, end))
             start = i + 1
     if start < len(tokens):
-        spans.append((start, len(tokens) - 1))
+        spans.append((start, len(tokens)))
 
     # Fallback to one clause when punctuation split gives nothing.
     if not spans:
-        spans = [(0, len(tokens) - 1)]
+        spans = [(0, len(tokens))]
 
     clauses: list[dict[str, Any]] = []
     for idx, (span_start, span_end) in enumerate(spans, start=1):
-        span_token_texts = [_norm_surface(tokens[i]) for i in range(span_start, span_end + 1)]
+        span_token_texts = [_norm_surface(tokens[i]) for i in range(span_start, span_end)]
         clause_type = _pick_clause_type(span_token_texts)
         if not any(text for text in span_token_texts if text and text not in PUNCT_MARKERS):
             clause_type = "elliptic"
         clause_root = root_dep
-        if not (span_start <= clause_root <= span_end):
+        if not (span_start <= clause_root < span_end):
             clause_root = span_start
         clauses.append(
             {
@@ -99,7 +99,7 @@ def build_clause_graph(
         curr = clauses[i]
         nxt = clauses[i + 1]
         span_start, span_end = nxt["token_span"]
-        token_slice = [_norm_surface(tokens[j]) for j in range(span_start, span_end + 1)]
+        token_slice = [_norm_surface(tokens[j]) for j in range(span_start, span_end)]
         discourse_links.append(
             {
                 "src_clause": curr["clause_id"],
@@ -109,4 +109,3 @@ def build_clause_graph(
         )
 
     return clauses, discourse_links
-

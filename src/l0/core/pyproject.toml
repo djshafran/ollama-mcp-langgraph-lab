@@ -9,13 +9,16 @@ description = "L0 core: deterministic SPIR analysis utilities"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
+dependencies = [
+  "jsonschema>=4.10.0",
+]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0.0",
-  "behave>=1.2.6",
-  "allure-behave>=2.13.5",
-  "allure-python-commons>=2.13.5",
+  "behave==1.2.6",
+  "allure-behave==2.13.5",
+  "allure-python-commons==2.13.5",
   "testcontainers>=4.0.0",
   "requests>=2.31.0",
 ]
@@ -23,3 +26,6 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["sprs_l0*"]
+
+[tool.setuptools.package-data]
+sprs_l0 = ["schemas/*.json"]

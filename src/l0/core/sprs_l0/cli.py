@@ -96,10 +96,10 @@ def cmd_export(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="sprs_l0")
+    p = argparse.ArgumentParser(prog="sprs-l0")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    p_an = sub.add_parser("analyze", help="Analyze corpus.jsonl into SPIR v0.4 jsonl")
+    p_an = sub.add_parser("analyze", help="Analyze corpus.jsonl into SPIR v0.5 jsonl")
     p_an.add_argument("--in", dest="input", required=True)
     p_an.add_argument("--out", dest="output", required=True)
     p_an.add_argument("--limit", type=int, default=0)
@@ -112,7 +112,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=os.getenv("SYNTAX_BACKEND", "rules"),
         help="Syntax parse backend",
     )
-    p_an.add_argument("--ud-mode", choices=["basic", "none"], default="basic")
+    p_an.add_argument(
+        "--ud-mode",
+        choices=["head_rules", "projected", "none"],
+        default="head_rules",
+    )
     p_an.add_argument("--ud", dest="ud", action="store_true", default=True)
     p_an.add_argument("--no-ud", dest="ud", action="store_false")
     p_an.add_argument("--include-enhanced", dest="include_enhanced", action="store_true", default=True)
@@ -122,7 +126,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_an.add_argument("--no-provenance", dest="include_provenance", action="store_false")
     p_an.set_defaults(func=cmd_analyze)
 
-    p_val = sub.add_parser("validate", help="Validate SPIR v0.4 jsonl")
+    p_val = sub.add_parser("validate", help="Validate SPIR v0.5 jsonl")
     p_val.add_argument("--in", dest="input", required=True)
     p_val.set_defaults(func=cmd_validate)
 
@@ -147,4 +151,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

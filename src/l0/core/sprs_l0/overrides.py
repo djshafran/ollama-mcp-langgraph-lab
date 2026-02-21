@@ -119,5 +119,6 @@ def apply_overrides(
 
     syntax_meta = syntax.setdefault("meta", {})
     syntax_meta["overrides_applied"] = changed_karaka or changed_ud
+    syntax_meta["override_ud_explicit"] = changed_ud
+    syntax_meta["override_karaka_explicit"] = changed_karaka
     return spir, bool(changed_karaka or changed_ud), needs_ud_recompute, warnings
-

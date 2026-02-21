@@ -10,22 +10,25 @@
 * **Обучаемый слой (L1)** — нейросетевой *санскритский базовый LM* (Transformer), который потребляет токены **вместе** с морфо‑грамм. факторами L0.
 * **Интероперабельные слои (L2+)** — адаптеры/проекции к другим языкам: выравнивание через словарные и синтаксические ресурсы (IndoWordNet/Princeton WordNet, UD‑деревья, параллельные тексты), а также MT‑модели для Индийских языков (например, IndicTrans2). ([universaldependencies.org][2])
 
-### Практический контракт в репозитории (SPIR v0.4.0)
+### Практический контракт в репозитории (SPIR v0.5.0)
 
 В текущей реализации L0 в репозитории `ollama-mcp-langgraph-lab` целевой контракт теперь такой:
 
 1. `syntax.paninian_edges` — карáка-ребра `{head, dep, role}`.
 2. `syntax.ud.basic_edges` — базовое UD-дерево.
-3. `syntax.ud.enhanced_edges` + `syntax.ud.empty_nodes` — enhanced слой.
+3. `syntax.ud.enhanced_edges` + `syntax.ud.empty_nodes` — enhanced слой (UD-compatible empty nodes `i.j` + DEPS).
 4. `syntax.clauses` + `syntax.discourse_links` — межклаузные связи.
 5. `semantics.kag` — Event+Deontic граф с provenance.
+6. `token_span` в `syntax.clauses` — half-open: `[start, end)`.
 
 Параметры окружения для управляемости:
 
 1. `SYNTAX_BACKEND=rules|hyderabad|none`
 2. `HYD_PARSER_URL` / `HYD_PARSER_CMD`
 3. `KARAKA_UD_MAP_PATH`
-4. `SYNTAX_OVERRIDES_PATH`
+4. `UD_HEAD_RULES_PATH`
+5. `SYNTAX_OVERRIDES_PATH`
+6. `ud_mode=head_rules|projected|none`
 
 ---
 

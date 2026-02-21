@@ -72,7 +72,7 @@ def make_kag(
     nodes: list[dict[str, Any]] | None = None,
     edges: list[dict[str, Any]] | None = None,
     norms: list[dict[str, Any]] | None = None,
-    version: str = "0.4.0",
+    version: str = "0.5.0",
 ) -> dict[str, Any]:
     return {
         "version": version,
@@ -84,4 +84,3 @@ def make_kag(
 
 def make_semantics(*, kag: dict[str, Any] | None = None) -> dict[str, Any]:
     return {"kag": kag or make_kag()}
-

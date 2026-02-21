@@ -28,6 +28,7 @@ def export_artifacts(
     ud = syntax.get("ud") or {}
     basic_edges = ud.get("basic_edges") or []
     enhanced_edges = ud.get("enhanced_edges") or []
+    empty_nodes = ud.get("empty_nodes") or []
     tokens = spir.get("tokens") or []
 
     kag = ((spir.get("semantics") or {}).get("kag")) or {}
@@ -39,13 +40,18 @@ def export_artifacts(
     out_dir = Path(output_dir) if output_dir else None
 
     if "conllu_basic" in requested:
-        text = edges_to_conllu(tokens, basic_edges, enhanced_edges=None)
+        text = edges_to_conllu(tokens, basic_edges, enhanced_edges=None, empty_nodes=None)
         outputs["conllu_basic"] = text
         if out_dir:
             _safe_write(out_dir / "work.ud.basic.conllu", text)
 
     if "conllu_enhanced" in requested:
-        text = edges_to_conllu(tokens, basic_edges, enhanced_edges=enhanced_edges)
+        text = edges_to_conllu(
+            tokens,
+            basic_edges,
+            enhanced_edges=enhanced_edges,
+            empty_nodes=empty_nodes,
+        )
         outputs["conllu_enhanced"] = text
         if out_dir:
             _safe_write(out_dir / "work.ud.enhanced.conllu", text)

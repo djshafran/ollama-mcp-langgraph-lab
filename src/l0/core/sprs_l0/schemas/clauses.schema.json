@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sprs-l0.local/schemas/clauses.schema.json",
+  "title": "SPIR v0.5 Clauses and Discourse",
+  "type": "object",
+  "required": ["clauses", "discourse_links"],
+  "properties": {
+    "clauses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["clause_id", "token_span", "clause_type"],
+        "properties": {
+          "clause_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "root_token_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "empty_node_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9]+\\.[0-9]+$"
+          },
+          "token_span": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "clause_type": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "discourse_links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["src_clause", "dst_clause", "rel"],
+        "properties": {
+          "src_clause": {
+            "type": "string",
+            "minLength": 1
+          },
+          "dst_clause": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rel": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

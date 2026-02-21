@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 1"
+
+jobs:
+  unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e src/l0/core[dev]
+
+      - name: Run Unit Tests
+        run: |
+          pytest -q src/l0/core/tests/unit
+
+  bdd:
+    name: BDD Integration
+    runs-on: ubuntu-latest
+    env:
+      L0_BACKEND: simple
+      SYNTAX_BACKEND: hyderabad
+      BDD_COMPOSE_FILE: tests/compose/docker-compose.test.yml
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e src/l0/core[dev]
+
+      - name: Run Behave
+        run: |
+          behave -f allure_behave.formatter:AllureFormatter -o allure-results
+
+      - name: Upload Allure Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results
+          path: allure-results
+
+  heritage_integration:
+    name: Heritage Integration (Optional)
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    env:
+      L0_BACKEND: heritage
+      SYNTAX_BACKEND: rules
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e src/l0/core[dev]
+
+      - name: Run Unit Smoke
+        run: |
+          pytest -q src/l0/core/tests/unit/test_ud_basic.py

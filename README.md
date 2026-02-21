@@ -48,34 +48,42 @@ Default testcontainers compose file: `tests/compose/docker-compose.test.yml` (L0
 5. Model, context size, and reasoning mode are controlled in `.env`.
 6. Flow mode runs the explicit graph: `python /app/flow.py "<prompt>"`.
 
-**L0 Syntax + Semantics Layer (SPIR v0.4.0)**
+**L0 Syntax + Semantics Layer (SPIR v0.5.0)**
 L0 now produces a structured syntax+semantics package:
 1. `syntax.paninian_edges`: list of `{head, dep, role}` (karaka graph).
 2. `syntax.ud.basic_edges`: basic UD tree (`rel` labels, exactly one root).
-3. `syntax.ud.enhanced_edges` + `syntax.ud.empty_nodes`: enhanced UD layer for shared args/ellipsis.
+3. `syntax.ud.enhanced_edges` + `syntax.ud.empty_nodes`: UD-compatible enhanced layer (`i.j` empty nodes + DEPS).
 4. `syntax.clauses` + `syntax.discourse_links`: clause/discourse layer.
 5. `semantics.kag`: Event+Deontic KAG with provenance.
+6. Clause spans use half-open policy: `token_span = [start, end)`.
 
 Backend selection:
 1. `SYNTAX_BACKEND=rules` (default) uses internal rule-based attachment.
 2. `SYNTAX_BACKEND=hydra` / `hyderabad` uses the external Hyderabad/Samsaadhanii parser.
 3. `SYNTAX_BACKEND=none` disables syntax.
 
+UD mode:
+1. `ud_mode=head_rules` (default) uses runtime `head_rules.yaml`.
+2. `ud_mode=projected` uses direct Paninian->UD projection (debug/compat inside v0.5 only).
+3. `ud_mode=none` disables UD.
+
 Hyderabad parser wiring:
 1. `HYD_PARSER_URL` to call a running HTTP/CGI service.
 2. `HYD_PARSER_CMD` to execute a local CLI command (use `{text}` placeholder or stdin).
 3. `KARAKA_UD_MAP_PATH` to override karaka->UD mapping JSON.
-4. `SYNTAX_OVERRIDES_PATH` to apply deterministic per-input graph patches.
+4. `UD_HEAD_RULES_PATH` to override active UD head rules YAML.
+5. `SYNTAX_OVERRIDES_PATH` to apply deterministic per-input graph patches.
+6. `RETRIEVAL_BACKEND=baseline|hybrid_prod` to choose retrieval tier.
 
 New L0 MCP tools:
-1. `l0_analyze` (SPIR v0.4 output).
+1. `l0_analyze` (SPIR v0.5 output).
 2. `l0_query_understand` (NL|SPIR -> KAG query + retrieval plan).
-3. `l0_retrieve` (hybrid BM25+vector+RRF+rereank retrieval).
+3. `l0_retrieve` (`baseline|hybrid_prod` tiered retrieval with fallback metadata).
 4. `l0_export` (sidecars: CoNLL-U basic/enhanced, KAG JSONL, align JSON).
 
 CLI example:
 ```bash
-SYNTAX_BACKEND=rules python -m sprs_l0.cli analyze --in src/l0/data/prepared/corpus.jsonl --out workspace/spir_samples_v04.jsonl
-python -m sprs_l0.cli validate --in workspace/spir_samples_v04.jsonl
-python -m sprs_l0.cli export --in workspace/spir_samples_v04.jsonl --out-dir workspace/exports
+SYNTAX_BACKEND=rules python -m sprs_l0.cli analyze --in src/l0/data/prepared/corpus.jsonl --out workspace/spir_samples_v05.jsonl
+python -m sprs_l0.cli validate --in workspace/spir_samples_v05.jsonl
+python -m sprs_l0.cli export --in workspace/spir_samples_v05.jsonl --out-dir workspace/exports
 ```

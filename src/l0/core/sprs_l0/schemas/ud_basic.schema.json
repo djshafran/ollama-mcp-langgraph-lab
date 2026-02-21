@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sprs-l0.local/schemas/ud_basic.schema.json",
+  "title": "SPIR v0.5 UD Basic",
+  "type": "object",
+  "required": ["basic_edges"],
+  "properties": {
+    "basic_edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["head", "dep", "rel"],
+        "properties": {
+          "head": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "dep": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "rel": {
+            "type": "string",
+            "minLength": 1
+          },
+          "conf": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

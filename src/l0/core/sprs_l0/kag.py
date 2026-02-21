@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .contracts_v04 import make_kag
+from .contracts_v05 import make_kag
 
 
 DEFAULT_LEXICON = {
@@ -50,11 +50,43 @@ def load_deontic_lexicon(
     return {k: list(v) for k, v in DEFAULT_LEXICON.items()}
 
 
-def infer_deontic_norms(
-    tokens: list[dict[str, Any]],
+def _find_clause_for_token(token_id: int, clauses: list[dict[str, Any]]) -> str | None:
+    for clause in clauses:
+        span = clause.get("token_span")
+        clause_id = clause.get("clause_id")
+        if (
+            isinstance(span, list)
+            and len(span) == 2
+            and isinstance(span[0], int)
+            and isinstance(span[1], int)
+            and isinstance(clause_id, str)
+        ):
+            start, end = span
+            if start <= token_id < end:
+                return clause_id
+    return None
+
+
+def _provenance(
     *,
+    token_ids: list[int],
+    clause_id: str | None,
+    source_ref: str,
+) -> dict[str, Any]:
+    return {
+        "token_ids": token_ids,
+        "clause_id": clause_id,
+        "source_ref": source_ref,
+    }
+
+
+def infer_deontic_norms(
+    *,
+    tokens: list[dict[str, Any]],
+    clauses: list[dict[str, Any]],
+    event_by_clause: dict[str, str],
+    fallback_event: str | None,
     lexicon: dict[str, list[str]],
-    event_node_ids: list[str],
     source_ref: str,
 ) -> list[dict[str, Any]]:
     if not tokens:
@@ -65,7 +97,6 @@ def infer_deontic_norms(
             modality_by_marker[_norm_text(marker)] = modality
 
     norms: list[dict[str, Any]] = []
-    target_event = event_node_ids[0] if event_node_ids else None
     for idx, token in enumerate(tokens):
         candidates = [
             _norm_text(token.get("surface")),
@@ -74,6 +105,11 @@ def infer_deontic_norms(
         modality = next((modality_by_marker[c] for c in candidates if c in modality_by_marker), None)
         if not modality:
             continue
+
+        clause_id = _find_clause_for_token(idx, clauses)
+        if clause_id is None and event_by_clause:
+            clause_id = next(iter(event_by_clause.keys()))
+        target_event = event_by_clause.get(clause_id) if clause_id else fallback_event
         norm_id = f"n{len(norms) + 1}"
         norms.append(
             {
@@ -81,11 +117,11 @@ def infer_deontic_norms(
                 "modality": modality,
                 "target_event_id": target_event,
                 "evidence_text": token.get("surface") or token.get("lemma") or "",
-                "provenance": {
-                    "token_ids": [idx],
-                    "clause_id": "c1",
-                    "source_ref": source_ref,
-                },
+                "provenance": _provenance(
+                    token_ids=[idx],
+                    clause_id=clause_id,
+                    source_ref=source_ref,
+                ),
             }
         )
     return norms
@@ -95,12 +131,13 @@ def attach_provenance(
     *,
     nodes: list[dict[str, Any]],
     edges: list[dict[str, Any]],
+    norms: list[dict[str, Any]],
     source_ref: str,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     for node in nodes:
         prov = node.get("provenance")
         if not isinstance(prov, dict):
-            node["provenance"] = {"token_ids": [], "clause_id": None, "source_ref": source_ref}
+            node["provenance"] = _provenance(token_ids=[], clause_id=None, source_ref=source_ref)
             continue
         prov.setdefault("token_ids", [])
         prov.setdefault("clause_id", None)
@@ -109,13 +146,22 @@ def attach_provenance(
     for edge in edges:
         prov = edge.get("provenance")
         if not isinstance(prov, dict):
-            edge["provenance"] = {"token_ids": [], "clause_id": None, "source_ref": source_ref}
+            edge["provenance"] = _provenance(token_ids=[], clause_id=None, source_ref=source_ref)
             continue
         prov.setdefault("token_ids", [])
         prov.setdefault("clause_id", None)
         prov.setdefault("source_ref", source_ref)
 
-    return nodes, edges
+    for norm in norms:
+        prov = norm.get("provenance")
+        if not isinstance(prov, dict):
+            norm["provenance"] = _provenance(token_ids=[], clause_id=None, source_ref=source_ref)
+            continue
+        prov.setdefault("token_ids", [])
+        prov.setdefault("clause_id", None)
+        prov.setdefault("source_ref", source_ref)
+
+    return nodes, edges, norms
 
 
 def build_kag_from_syntax(
@@ -126,25 +172,15 @@ def build_kag_from_syntax(
     tokens = spir.get("tokens") or []
     syntax = spir.get("syntax") or {}
     paninian_edges = syntax.get("paninian_edges") or []
-    basic_ud = ((syntax.get("ud") or {}).get("basic_edges")) or []
+    clauses = syntax.get("clauses") or []
     source_ref = str((spir.get("meta") or {}).get("input_hash") or "unknown")
     lexicon = load_deontic_lexicon(artifacts_dir=artifacts_dir)
 
-    root_dep = next(
-        (
-            int(edge.get("dep"))
-            for edge in basic_ud
-            if edge.get("head") is None and (edge.get("rel") == "root" or edge.get("relation") == "root")
-        ),
-        0,
-    )
-
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
-    event_node_ids: list[str] = []
     token_to_entity: dict[int, str] = {}
+    event_by_clause: dict[str, str] = {}
 
-    # Source node for provenance grounding.
     source_node_id = "src1"
     nodes.append(
         {
@@ -152,45 +188,91 @@ def build_kag_from_syntax(
             "type": "Source",
             "label": "InputText",
             "data": {"input_hash": source_ref},
-            "provenance": {"token_ids": [], "clause_id": None, "source_ref": source_ref},
+            "provenance": _provenance(token_ids=[], clause_id=None, source_ref=source_ref),
         }
     )
 
-    # Build one primary event from root.
-    if tokens:
-        root_token = tokens[root_dep] if 0 <= root_dep < len(tokens) else tokens[0]
-        event_id = "ev1"
-        event_node_ids.append(event_id)
+    for idx, clause in enumerate(clauses, start=1):
+        clause_id = clause.get("clause_id")
+        if not isinstance(clause_id, str):
+            continue
+        root_token_id = clause.get("root_token_id")
+        token_ids: list[int] = []
+        label = f"event_{idx}"
+        if isinstance(root_token_id, int) and 0 <= root_token_id < len(tokens):
+            root_token = tokens[root_token_id]
+            token_ids = [root_token_id]
+            label = str(root_token.get("lemma") or root_token.get("surface") or label)
+
+        event_id = f"ev{idx}"
+        event_by_clause[clause_id] = event_id
         nodes.append(
             {
                 "id": event_id,
                 "type": "Event",
-                "label": str(root_token.get("lemma") or root_token.get("surface") or "event"),
-                "data": {"root_token_id": root_dep},
-                "provenance": {"token_ids": [root_dep], "clause_id": "c1", "source_ref": source_ref},
+                "label": label,
+                "data": {
+                    "clause_id": clause_id,
+                    "root_token_id": root_token_id if isinstance(root_token_id, int) else None,
+                    "empty_node_id": clause.get("empty_node_id"),
+                },
+                "provenance": _provenance(
+                    token_ids=token_ids,
+                    clause_id=clause_id,
+                    source_ref=source_ref,
+                ),
+            }
+        )
+        edges.append(
+            {
+                "id": f"e_src_{event_id}",
+                "src": source_node_id,
+                "dst": event_id,
+                "type": "GROUNDED_IN",
+                "provenance": _provenance(
+                    token_ids=token_ids,
+                    clause_id=clause_id,
+                    source_ref=source_ref,
+                ),
+            }
+        )
+
+    fallback_event: str | None = None
+    if not event_by_clause and tokens:
+        nodes.append(
+            {
+                "id": "ev1",
+                "type": "Event",
+                "label": str(tokens[0].get("lemma") or tokens[0].get("surface") or "event"),
+                "data": {"clause_id": None, "root_token_id": 0},
+                "provenance": _provenance(token_ids=[0], clause_id=None, source_ref=source_ref),
             }
         )
         edges.append(
             {
                 "id": "e_src_ev1",
                 "src": source_node_id,
-                "dst": event_id,
+                "dst": "ev1",
                 "type": "GROUNDED_IN",
-                "provenance": {"token_ids": [root_dep], "clause_id": "c1", "source_ref": source_ref},
+                "provenance": _provenance(token_ids=[0], clause_id=None, source_ref=source_ref),
             }
         )
+        fallback_event = "ev1"
 
-    # Entity nodes + argument edges from paninian roles.
+    if fallback_event is None:
+        fallback_event = next(iter(event_by_clause.values()), None)
+
     for idx, token in enumerate(tokens):
         entity_id = f"ent{idx + 1}"
         token_to_entity[idx] = entity_id
+        clause_id = _find_clause_for_token(idx, clauses)
         nodes.append(
             {
                 "id": entity_id,
                 "type": "Entity",
                 "label": str(token.get("lemma") or token.get("surface") or f"tok_{idx}"),
                 "data": {"token_id": idx},
-                "provenance": {"token_ids": [idx], "clause_id": "c1", "source_ref": source_ref},
+                "provenance": _provenance(token_ids=[idx], clause_id=clause_id, source_ref=source_ref),
             }
         )
         edges.append(
@@ -199,7 +281,7 @@ def build_kag_from_syntax(
                 "src": source_node_id,
                 "dst": entity_id,
                 "type": "GROUNDED_IN",
-                "provenance": {"token_ids": [idx], "clause_id": "c1", "source_ref": source_ref},
+                "provenance": _provenance(token_ids=[idx], clause_id=clause_id, source_ref=source_ref),
             }
         )
 
@@ -208,25 +290,29 @@ def build_kag_from_syntax(
         role = str(karaka.get("role") or "dep")
         if not isinstance(dep, int) or dep not in token_to_entity:
             continue
-        target_entity = token_to_entity[dep]
-        if not event_node_ids:
+        clause_id = _find_clause_for_token(dep, clauses)
+        source_event = event_by_clause.get(clause_id) if clause_id else fallback_event
+        if source_event is None:
             continue
+        target_entity = token_to_entity[dep]
         edges.append(
             {
                 "id": f"arg{edge_idx}",
-                "src": event_node_ids[0],
+                "src": source_event,
                 "dst": target_entity,
                 "type": "ARG",
                 "label": role,
                 "data": {"role": role},
-                "provenance": {"token_ids": [dep], "clause_id": "c1", "source_ref": source_ref},
+                "provenance": _provenance(token_ids=[dep], clause_id=clause_id, source_ref=source_ref),
             }
         )
 
     norms = infer_deontic_norms(
         tokens=tokens,
+        clauses=clauses,
+        event_by_clause=event_by_clause,
+        fallback_event=fallback_event,
         lexicon=lexicon,
-        event_node_ids=event_node_ids,
         source_ref=source_ref,
     )
     for idx, norm in enumerate(norms, start=1):
@@ -240,12 +326,13 @@ def build_kag_from_syntax(
                 "provenance": norm.get("provenance", {}),
             }
         )
-        if event_node_ids:
+        target_event_id = norm.get("target_event_id")
+        if isinstance(target_event_id, str):
             edges.append(
                 {
                     "id": f"modal{idx}",
                     "src": norm_node_id,
-                    "dst": event_node_ids[0],
+                    "dst": target_event_id,
                     "type": "MODAL",
                     "label": norm["modality"],
                     "data": {"modality": norm["modality"]},
@@ -254,6 +341,10 @@ def build_kag_from_syntax(
             )
         norm["norm_node_id"] = norm_node_id
 
-    nodes, edges = attach_provenance(nodes=nodes, edges=edges, source_ref=source_ref)
+    nodes, edges, norms = attach_provenance(
+        nodes=nodes,
+        edges=edges,
+        norms=norms,
+        source_ref=source_ref,
+    )
     return make_kag(nodes=nodes, edges=edges, norms=norms)
-

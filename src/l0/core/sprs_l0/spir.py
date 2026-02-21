@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
-SPIR_VERSION = "0.4.0"
+SPIR_VERSION = "0.5.0"
 DEFAULT_CAPABILITIES = [
     "normalize",
     "segment_lattice",
     "lemma",
     "morph_stub",
-    "syntax_v04",
+    "syntax_v05",
     "kag_event_deontic",
 ]
 
@@ -36,32 +37,17 @@ def hash_artifacts_dir(artifacts_dir: str | Path | None) -> str:
     return h.hexdigest()
 
 
+def _schema_dir() -> Path:
+    return Path(__file__).resolve().parent / "schemas"
+
+
+def _load_schema(filename: str) -> dict[str, Any]:
+    schema_path = _schema_dir() / filename
+    return json.loads(schema_path.read_text(encoding="utf-8"))
+
+
 def spir_schema() -> dict[str, Any]:
-    return {
-        "type": "object",
-        "required": [
-            "meta",
-            "normalized_text",
-            "tokens",
-            "segments",
-            "capabilities",
-            "syntax",
-            "semantics",
-        ],
-        "properties": {
-            "meta": {
-                "type": "object",
-                "required": ["version", "artifacts_hash", "input_hash"],
-            },
-            "normalized_text": {"type": "string"},
-            "tokens": {"type": "array"},
-            "segments": {"type": "array"},
-            "capabilities": {"type": "array"},
-            "syntax": {"type": "object"},
-            "semantics": {"type": "object"},
-            "provenance": {"type": "object"},
-        },
-    }
+    return _load_schema("spir_v0_5.schema.json")
 
 
 def make_spir(

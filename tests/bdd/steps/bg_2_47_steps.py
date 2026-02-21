@@ -228,3 +228,36 @@ def step_then_has_deontic_norms(context):
     assert isinstance(norms, list), "KAG norms must be list"
     assert len(norms) > 0, "No deontic norms found in KAG"
 
+
+@then("SPIR enhanced UD empty node ids are UD-compatible")
+def step_then_ud_empty_ids_are_compatible(context):
+    spir = getattr(context, "spir", None)
+    assert isinstance(spir, dict), "SPIR missing or invalid"
+    empty_nodes = ((spir.get("syntax", {}) or {}).get("ud", {}) or {}).get("empty_nodes", [])
+    assert isinstance(empty_nodes, list), "SPIR.syntax.ud.empty_nodes must be list"
+    for node in empty_nodes:
+        if not isinstance(node, dict):
+            continue
+        node_id = node.get("id")
+        assert isinstance(node_id, str), "empty node id must be string"
+        if node_id:
+            parts = node_id.split(".")
+            assert len(parts) == 2 and all(p.isdigit() for p in parts), f"invalid empty id: {node_id}"
+
+
+@then("SPIR KAG norms have clause-aware provenance")
+def step_then_norms_have_clause_provenance(context):
+    spir = getattr(context, "spir", None)
+    assert isinstance(spir, dict), "SPIR missing or invalid"
+    clauses = ((spir.get("syntax") or {}).get("clauses")) or []
+    clause_ids = {c.get("clause_id") for c in clauses if isinstance(c, dict)}
+    norms = ((((spir.get("semantics") or {}).get("kag") or {}).get("norms")) or [])
+    assert isinstance(norms, list), "KAG norms must be list"
+    assert norms, "No norms to validate provenance"
+    for norm in norms:
+        if not isinstance(norm, dict):
+            continue
+        prov = norm.get("provenance") or {}
+        clause_id = prov.get("clause_id")
+        assert isinstance(clause_id, str), "norm provenance.clause_id must be string"
+        assert clause_id in clause_ids, f"norm clause_id not found: {clause_id}"

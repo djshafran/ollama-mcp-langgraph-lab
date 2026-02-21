@@ -15,4 +15,6 @@ Feature: BG 2.47 - Syntax and KAG through L0 MCP service
     And SPIR UD basic edges are present
     And SPIR UD includes relation "obl:loc"
     And SPIR has enhanced UD layer
+    And SPIR enhanced UD empty node ids are UD-compatible
     And SPIR has deontic norms
+    And SPIR KAG norms have clause-aware provenance

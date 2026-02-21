@@ -29,14 +29,14 @@ def l0_analyze(
     syntax_backend: str | None = None,
     return_ud: bool = True,
     return_syntax: bool = True,
-    ud_mode: str = "basic",
+    ud_mode: str = "head_rules",
     include_enhanced: bool = True,
     include_kag: bool = True,
     include_provenance: bool = True,
     doc: str | None = None,
     ref: str | None = None,
 ) -> dict:
-    """Analyze input text into SPIR v0.4 with syntax + KAG."""
+    """Analyze input text into SPIR v0.5 with syntax + KAG."""
     return analyze(
         text,
         input_format=input_format,
@@ -80,14 +80,16 @@ def l0_retrieve(
     top_k: int = 5,
     filters: dict | None = None,
     corpus_path: str | None = None,
+    retrieval_backend: str | None = None,
 ) -> dict:
-    """Hybrid retrieval (BM25+vector+RRF+rerank) over artifact corpus."""
+    """Tiered retrieval backend: baseline or hybrid_prod."""
     return retrieve_candidates(
         kag_query,
         top_k=top_k,
         filters=filters,
         corpus_path=corpus_path,
         artifacts_dir=str(ARTIFACT_DIR),
+        retrieval_backend=retrieval_backend,
     )
 
 
@@ -129,7 +131,7 @@ def l0_compress(
 
 @mcp.tool()
 def l0_validate(spir: dict) -> dict:
-    """Validate SPIR v0.4 structure."""
+    """Validate SPIR v0.5 structure."""
     return validate_spir(spir)
 
 
@@ -143,4 +145,3 @@ if __name__ == "__main__":
     host = os.getenv("MCP_HOST", "0.0.0.0")
     port = int(os.getenv("MCP_PORT", "8000"))
     mcp.run(transport="http", host=host, port=port)
-

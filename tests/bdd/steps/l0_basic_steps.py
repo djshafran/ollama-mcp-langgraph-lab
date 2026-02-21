@@ -112,6 +112,15 @@ def step_then_paninian_edges_present(context):
     assert len(edges) > 0, "SPIR.syntax.paninian_edges is empty"
 
 
+@then('SPIR version equals "{expected}"')
+def step_then_spir_version(context, expected: str):
+    spir = getattr(context, "spir", None)
+    assert isinstance(spir, dict), "SPIR missing or invalid"
+    meta = spir.get("meta", {})
+    assert isinstance(meta, dict), "SPIR.meta must be object"
+    assert meta.get("version") == expected, f"Unexpected SPIR version: {meta.get('version')}"
+
+
 @then("SPIR tokens are present")
 def step_then_tokens_present(context):
     spir = getattr(context, "spir", None)

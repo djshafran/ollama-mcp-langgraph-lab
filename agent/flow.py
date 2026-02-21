@@ -100,6 +100,7 @@ async def _retrieve(tool_map: dict[str, Any], state: FlowState) -> FlowState:
     bundle = state.get("query_bundle", {})
     kag_query = bundle.get("kag_query", {})
     plan = bundle.get("retrieval_plan", {})
+    retrieval_backend = os.getenv("RETRIEVAL_BACKEND", "baseline")
     retrieved = await _call_tool(
         tool_map,
         "l0_retrieve",
@@ -107,6 +108,7 @@ async def _retrieve(tool_map: dict[str, Any], state: FlowState) -> FlowState:
             "kag_query": kag_query,
             "top_k": 5,
             "filters": plan.get("filters") or {},
+            "retrieval_backend": retrieval_backend,
         },
     )
     return {"retrieved": retrieved}
@@ -164,6 +166,7 @@ async def _answer(llm: ChatOllama, state: FlowState) -> FlowState:
         "query": state["query"],
         "facts": state.get("facts"),
         "provenance": (state.get("retrieved") or {}).get("provenance"),
+        "retrieval_meta": (state.get("retrieved") or {}).get("meta"),
     }
     response = await llm.ainvoke(
         [
@@ -238,4 +241,3 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
-

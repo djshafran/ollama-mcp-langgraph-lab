@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Callable
 
 
@@ -54,6 +55,7 @@ def build_kag_query(
         "vector_query": " ".join(terms),
         "fusion": "rrf",
         "rerank": "lexical_cross",
+        "backend": os.getenv("RETRIEVAL_BACKEND", "baseline"),
         "filters": filters,
     }
     return {
@@ -76,4 +78,3 @@ def query_understand(
         analyzer=analyzer,
         max_terms=max_terms,
     )
-

@@ -20,6 +20,9 @@ def test_clause_graph_builds_discourse_links():
     ]
     clauses, discourse = build_clause_graph(tokens=tokens, basic_edges=basic)
     assert len(clauses) >= 1
+    first_span = clauses[0]["token_span"]
+    assert first_span[1] <= len(tokens)
+    assert first_span[1] > first_span[0]
     if len(clauses) > 1:
         assert len(discourse) >= 1
         assert discourse[0]["rel"] in {
@@ -31,4 +34,3 @@ def test_clause_graph_builds_discourse_links():
             "contrast",
             "elaboration",
         }
-

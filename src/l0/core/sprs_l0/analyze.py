@@ -5,14 +5,19 @@ from typing import Any
 import os
 
 from .clause import build_clause_graph
-from .contracts_v04 import make_semantics, make_syntax
+from .contracts_v05 import make_semantics, make_syntax
 from .eud import build_enhanced_ud
 from .kag import build_kag_from_syntax
 from .normalize import normalize_text
 from .overrides import apply_overrides, load_overrides
 from .spir import DEFAULT_CAPABILITIES, hash_artifacts_dir, hash_text, make_spir
 from .syntax import analyze_syntax
-from .ud import load_karaka_ud_mapping, map_karaka_to_ud, validate_basic_ud_tree
+from .ud import (
+    build_basic_ud,
+    load_head_rules,
+    load_karaka_ud_mapping,
+    validate_basic_ud_tree,
+)
 
 
 def _simple_tokenize(text: str) -> list[dict[str, Any]]:
@@ -106,7 +111,7 @@ def analyze(
     syntax_backend: str | None = None,
     return_ud: bool = True,
     return_syntax: bool = True,
-    ud_mode: str = "basic",
+    ud_mode: str = "head_rules",
     include_enhanced: bool = True,
     kag_mode: str = "full",
     include_provenance: bool = True,
@@ -121,7 +126,6 @@ def analyze(
         try:
             tokens, extra_meta = _heritage_tokenize(normalized)
             if normalized and not tokens:
-                # Deterministic fallback to keep pipeline usable when Heritage returns no analysis.
                 tokens = _simple_tokenize(normalized)
                 extra_meta = {
                     "backend": "simple",
@@ -150,7 +154,11 @@ def analyze(
         syntax_backend_value = "hyderabad"
 
     paninian_edges: list[dict[str, Any]] = []
-    syntax_meta: dict[str, Any] = {"errors": [], "warnings": [], "overrides_applied": False}
+    syntax_meta: dict[str, Any] = {
+        "errors": [],
+        "warnings": [],
+        "overrides_applied": False,
+    }
     if return_syntax:
         paninian_edges, _, syntax_meta_backend = analyze_syntax(
             text=normalized,
@@ -166,19 +174,79 @@ def analyze(
     )
     syntax_meta["mapping_version"] = mapping_version
 
-    basic_ud: list[dict[str, Any]] = []
-    if return_ud and paninian_edges:
-        basic_ud, map_meta = map_karaka_to_ud(paninian_edges, tokens=tokens, mapping=ud_mapping)
-        syntax_meta["warnings"].extend(map_meta.get("warnings") or [])
-        syntax_meta["errors"].extend(map_meta.get("errors") or [])
+    head_rules_path = os.getenv("UD_HEAD_RULES_PATH", "").strip() or None
+    head_rules, head_rules_version = load_head_rules(
+        artifacts_dir=artifacts_dir,
+        head_rules_path=head_rules_path,
+    )
+    syntax_meta["head_rules_version"] = head_rules_version
 
-    if return_ud and ud_mode == "none":
-        basic_ud = []
+    provisional = {
+        "meta": {"input_hash": hash_text(normalized)},
+        "syntax": {
+            "paninian_edges": paninian_edges,
+            "ud": {"basic_edges": []},
+            "meta": {"overrides_applied": False},
+        },
+    }
+
+    # Pipeline ordering v0.5: overrides before UD/clause/EUD/KAG.
+    overrides_path = _resolve_syntax_overrides_path(artifacts_dir)
+    overrides_index = load_overrides(overrides_path)
+    applied = False
+    needs_ud_recompute = False
+    if overrides_index:
+        provisional, applied, needs_ud_recompute, override_warnings = apply_overrides(
+            provisional, overrides_index, doc=doc, ref=ref
+        )
+        syntax_meta["warnings"].extend(override_warnings)
+        syntax_meta["overrides_applied"] = bool(applied)
+
+    paninian_edges = (
+        (provisional.get("syntax") or {}).get("paninian_edges") or paninian_edges
+    )
+    override_meta = ((provisional.get("syntax") or {}).get("meta")) or {}
+    override_ud_explicit = bool(override_meta.get("override_ud_explicit"))
+
+    basic_ud: list[dict[str, Any]] = []
+    if return_ud:
+        if ud_mode == "none":
+            basic_ud = []
+        elif override_ud_explicit and not needs_ud_recompute:
+            basic_ud = ((provisional.get("syntax") or {}).get("ud") or {}).get("basic_edges") or []
+            syntax_meta["warnings"].append("Using explicit ud_patch from syntax overrides")
+        else:
+            basic_ud, ud_meta = build_basic_ud(
+                tokens=tokens,
+                paninian_edges=paninian_edges,
+                mapping=ud_mapping,
+                ud_mode=ud_mode,
+                head_rules=head_rules,
+            )
+            syntax_meta["warnings"].extend(ud_meta.get("warnings") or [])
+            syntax_meta["errors"].extend(ud_meta.get("errors") or [])
+
+    if basic_ud:
+        ok_ud, ud_errors, ud_warnings = validate_basic_ud_tree(tokens=tokens, basic_edges=basic_ud)
+        if not ok_ud:
+            syntax_meta["errors"].extend(ud_errors)
+        syntax_meta["warnings"].extend(ud_warnings)
 
     clauses: list[dict[str, Any]] = []
     discourse_links: list[dict[str, Any]] = []
-    if return_syntax and basic_ud:
-        clauses, discourse_links = build_clause_graph(tokens=tokens, basic_edges=basic_ud)
+    if return_syntax:
+        if basic_ud:
+            clauses, discourse_links = build_clause_graph(tokens=tokens, basic_edges=basic_ud)
+        elif tokens:
+            clauses = [
+                {
+                    "clause_id": "c1",
+                    "root_token_id": 0,
+                    "token_span": [0, len(tokens)],
+                    "clause_type": "main",
+                }
+            ]
+            discourse_links = []
 
     enhanced_ud: list[dict[str, Any]] = []
     empty_nodes: list[dict[str, Any]] = []
@@ -190,40 +258,6 @@ def analyze(
         )
         syntax_meta["warnings"].extend(eud_meta.get("warnings") or [])
 
-    # Apply per-input golden overrides.
-    overrides_path = _resolve_syntax_overrides_path(artifacts_dir)
-    overrides_index = load_overrides(overrides_path)
-    if overrides_index:
-        provisional = {
-            "meta": {
-                "input_hash": hash_text(normalized),
-            },
-            "syntax": {
-                "paninian_edges": paninian_edges,
-                "ud": {"basic_edges": basic_ud},
-                "meta": {"overrides_applied": False},
-            },
-        }
-        provisional, applied, needs_ud_recompute, override_warnings = apply_overrides(
-            provisional, overrides_index, doc=doc, ref=ref
-        )
-        syntax_meta["warnings"].extend(override_warnings)
-        syntax_meta["overrides_applied"] = bool(applied)
-        if applied:
-            paninian_edges = provisional["syntax"]["paninian_edges"]
-            if needs_ud_recompute:
-                basic_ud, map_meta = map_karaka_to_ud(paninian_edges, tokens=tokens, mapping=ud_mapping)
-                syntax_meta["warnings"].extend(map_meta.get("warnings") or [])
-                syntax_meta["errors"].extend(map_meta.get("errors") or [])
-            else:
-                basic_ud = provisional["syntax"]["ud"]["basic_edges"]
-
-    if basic_ud:
-        ok_ud, ud_errors, ud_warnings = validate_basic_ud_tree(tokens=tokens, basic_edges=basic_ud)
-        if not ok_ud:
-            syntax_meta["errors"].extend(ud_errors)
-        syntax_meta["warnings"].extend(ud_warnings)
-
     syntax = make_syntax(
         backend=str(syntax_meta.get("syntax_backend") or syntax_backend_value or "none"),
         paninian_edges=paninian_edges,
@@ -234,11 +268,13 @@ def analyze(
         discourse_links=discourse_links,
         meta={
             "mapping_version": syntax_meta.get("mapping_version") or "builtin",
+            "head_rules_version": syntax_meta.get("head_rules_version") or "builtin",
             "overrides_applied": bool(syntax_meta.get("overrides_applied")),
             "errors": syntax_meta.get("errors") or [],
             "warnings": syntax_meta.get("warnings") or [],
             "fallback_from": syntax_meta.get("syntax_fallback_from"),
             "error": syntax_meta.get("syntax_error"),
+            "ud_mode": ud_mode,
         },
     )
 
